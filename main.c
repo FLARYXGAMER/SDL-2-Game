@@ -4,6 +4,11 @@ int main()
 {
     printf("Hej"); 
 
+    while(1)
+    {
+        printf("dududu");
+    }
+
     return 0;
 }
 
