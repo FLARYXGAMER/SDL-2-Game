@@ -8,5 +8,6 @@ int main()
 }
 
 //testar att jag kan ändra -Alan
+//det gick -Alan
 
 
