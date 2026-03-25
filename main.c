@@ -6,7 +6,7 @@ int main()
 
     while(1)
     {
-        printf("dududu");
+        printf("iman");
     }
 
     return 0;
