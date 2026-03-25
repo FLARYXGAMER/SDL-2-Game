@@ -2,17 +2,13 @@
 
 int main()
 {
-    printf("HELLo"); 
+    printf("Hej\n");
 
-    while(1)
+    for(int i = 0; i < 2; i++)
     {
-        printf("iman");
+        printf("Tyst Elias\n");
     }
 
     return 0;
 }
-
-//testar att jag kan ändra -Alan
-//det gick -SA
-
 
