@@ -14,7 +14,7 @@ typedef struct Button {
     const char* label;
 } Button;
 
-// Function declarations
+
 Button initializeButton(int w, int h, SDL_Color top, SDL_Color bottom, SDL_Color text, const char* label);
 void centerButtonBottom(Button* b, SDL_Rect parent, int padding);
 void renderMenu(SDL_Renderer* renderer, Button* button, TTF_Font* font);

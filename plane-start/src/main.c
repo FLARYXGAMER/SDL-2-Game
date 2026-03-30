@@ -8,15 +8,15 @@
 #include <stdbool.h> 
 #include "../include/UI.h"
 
-#define SCREEN_WIDTH 800
-#define SCREEN_HEIGHT 600
+#define SCREEN_WIDTH 1200 //800
+#define SCREEN_HEIGHT 800 //600
 #define MAX_BULLETS 100
 #define MAX_ENEMIES 20
 #define PLAYER_LIVES 4
 
 typedef struct {
   float x, y;
-  int active;
+  bool active;
 } Bullet;
 
 typedef struct {
@@ -318,4 +318,3 @@ int main(int argc, char* argv[]) {
 
   return 0;
 }
-
