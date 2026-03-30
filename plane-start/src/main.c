@@ -3,11 +3,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <math.h>
 
 #define SCREEN_WIDTH 800
 #define SCREEN_HEIGHT 600
 #define MAX_BULLETS 100
 #define MAX_ENEMIES 20
+#define PLAYER_LIVES 3
 
 typedef struct {
     float x, y;
@@ -16,6 +18,8 @@ typedef struct {
 
 typedef struct {
     float x, y;
+    float baseX;
+    float offset;
     int active;
 } Enemy;
 
@@ -25,7 +29,7 @@ int main(int argc, char* argv[]) {
     SDL_Init(SDL_INIT_VIDEO);
     IMG_Init(IMG_INIT_PNG);
 
-    SDL_Window* window = SDL_CreateWindow("Shooter Prototype",
+    SDL_Window* window = SDL_CreateWindow("Shooter with Lives",
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
         SCREEN_WIDTH, SCREEN_HEIGHT, 0);
 
@@ -36,6 +40,7 @@ int main(int argc, char* argv[]) {
     SDL_Texture* bulletTex = SDL_CreateTextureFromSurface(renderer, IMG_Load("resources/test-bullet.png"));
     SDL_SetTextureBlendMode(bulletTex, SDL_BLENDMODE_BLEND);
     SDL_Texture* enemyTex = SDL_CreateTextureFromSurface(renderer, IMG_Load("resources/plane5.png"));
+    SDL_Texture* heartTex = SDL_CreateTextureFromSurface(renderer, IMG_Load("resources/heart.png"));
 
     // Plane
     SDL_Rect plane = {SCREEN_WIDTH/2 - 32, SCREEN_HEIGHT - 80, 64, 64};
@@ -47,6 +52,7 @@ int main(int argc, char* argv[]) {
     Enemy enemies[MAX_ENEMIES] = {0};
 
     int score = 0;
+    int lives = PLAYER_LIVES;
     int shootTimer = 0, shootDelay = 10;
     int running = 1;
     SDL_Event e;
@@ -95,16 +101,20 @@ int main(int argc, char* argv[]) {
         // Spawn enemies randomly
         for(int i=0;i<MAX_ENEMIES;i++){
             if (!enemies[i].active && rand()%1000<5){
-                enemies[i].x = rand() % (SCREEN_WIDTH - 64);
+                enemies[i].baseX = rand() % (SCREEN_WIDTH - 64);
+                enemies[i].x = enemies[i].baseX;
                 enemies[i].y = -64;
+                enemies[i].offset = (float)(rand()%360)/50.0f;
                 enemies[i].active = 1;
             }
         }
 
-        // Update enemies
+        // Update enemies (vertikal + sväng)
         for(int i=0;i<MAX_ENEMIES;i++){
             if (enemies[i].active){
                 enemies[i].y += 2;
+                enemies[i].offset += 0.05f;
+                enemies[i].x = enemies[i].baseX + 50 * sin(enemies[i].offset);
                 if (enemies[i].y > SCREEN_HEIGHT) enemies[i].active = 0;
             }
         }
@@ -120,7 +130,22 @@ int main(int argc, char* argv[]) {
                     bullets[i].active=0;
                     enemies[j].active=0;
                     score+=10;
-                    printf("Score: %d\n", score); // Visar score i terminalen
+                    printf("Score: %d\n", score);
+                }
+            }
+        }
+
+        // Check collisions enemies vs player
+        for(int i=0;i<MAX_ENEMIES;i++){
+            if (!enemies[i].active) continue;
+            SDL_Rect en = {(int)enemies[i].x,(int)enemies[i].y,64,64};
+            if (SDL_HasIntersection(&plane,&en)){
+                enemies[i].active=0;
+                lives--;
+                printf("Lives: %d\n", lives);
+                if (lives <= 0){
+                    printf("Game Over!\n");
+                    running = 0;
                 }
             }
         }
@@ -146,10 +171,17 @@ int main(int argc, char* argv[]) {
         SDL_Rect eRect={0,0,64,64};
         for(int i=0;i<MAX_ENEMIES;i++){
             if (enemies[i].active){
-                eRect.x=(int)enemies[i].x;
-                eRect.y=(int)enemies[i].y;
-                SDL_RenderCopyEx(renderer, enemyTex, NULL, &eRect, 0, NULL, SDL_FLIP_VERTICAL);
+                eRect.x = (int)enemies[i].x;
+                eRect.y = (int)enemies[i].y;
+                SDL_RenderCopyEx(renderer, enemyTex,NULL,&eRect,0,NULL,SDL_FLIP_VERTICAL);
             }
+        }
+
+        // Draw hearts (liv) uppe till vänster
+        SDL_Rect hRect = {10,10,32,32};
+        for(int i=0;i<lives;i++){
+            hRect.x = 10 + i*40;
+            SDL_RenderCopy(renderer, heartTex,NULL,&hRect);
         }
 
         SDL_RenderPresent(renderer);
@@ -159,6 +191,7 @@ int main(int argc, char* argv[]) {
     SDL_DestroyTexture(planeTex);
     SDL_DestroyTexture(bulletTex);
     SDL_DestroyTexture(enemyTex);
+    SDL_DestroyTexture(heartTex);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
 
