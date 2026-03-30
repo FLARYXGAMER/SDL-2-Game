@@ -1,13 +1,13 @@
 CC = gcc
 
 CFLAGS = `sdl2-config --cflags`
-LDFLAGS = `sdl2-config --libs` -lSDL2_image
+LDFLAGS = `sdl2-config --libs` -lSDL2_image -lm -lSDL2_ttf
 
-SRC = src/main.c
+SRC = $(wildcard src/*.c)
 TARGET = game
 
 all:
-	$(CC) $(SRC) -o $(TARGET) $(CFLAGS) $(LDFLAGS)
+	$(CC) $(SRC) $(CFLAGS) -o $(TARGET) $(LDFLAGS)
 
 run: all
 	./$(TARGET)
