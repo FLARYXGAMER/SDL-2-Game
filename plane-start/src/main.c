@@ -98,7 +98,7 @@ int main(int argc, char* argv[]) {
     printf("Renderer Error: %s\n", SDL_GetError());
     return 1;
   }
-  TTF_Font* font = TTF_OpenFont("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 24);
+  TTF_Font* font = TTF_OpenFont("../resources/fonts/DejaVuSans.ttf", 24);
   if (!font) {
     printf("Failed to load font: %s\n", TTF_GetError());
     SDL_DestroyRenderer(renderer);
