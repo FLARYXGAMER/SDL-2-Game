@@ -7,16 +7,17 @@
 #include <math.h> 
 #include <stdbool.h> 
 #include "../include/UI.h"
+#include "sound.h"
 
-#define SCREEN_WIDTH 800
-#define SCREEN_HEIGHT 600
+#define SCREEN_WIDTH 1200 //800
+#define SCREEN_HEIGHT 800 //600
 #define MAX_BULLETS 100
 #define MAX_ENEMIES 20
 #define PLAYER_LIVES 4
 
 typedef struct {
   float x, y;
-  int active;
+  bool active;
 } Bullet;
 
 typedef struct {
@@ -68,10 +69,34 @@ int main(int argc, char* argv[]) {
   srand(time(NULL));
 
   // Init SDL
-  if (SDL_Init(SDL_INIT_VIDEO) != 0) {
+  if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) != 0) {
     printf("SDL_Init Error: %s\n", SDL_GetError());
     return 1;
   }
+
+  //initializerar audio
+  if (!initAudio()) {
+    return 1;
+  }
+ //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  if (!initAudio()) {
+  printf("Audio init failed: %s\n", Mix_GetError());
+  return 1;
+}
+
+//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  Mix_Chunk* shootSound = loadSound("resources/sounds/bullet.wav");
+  if (!shootSound) {
+    printf("FAILED TO LOAD SOUND\n");
+  }
+
+  Mix_VolumeChunk(shootSound, 32); //sänker volymen
+
+  Mix_Chunk* hitsound = loadSound("resources/sounds/roblox.wav");
+  if (!hitsound) {
+    printf("FAILED TO LOAD SOUND\n");
+  }
+
 
   if (TTF_Init() != 0) {
     printf("TTF Init Error: %s\n", TTF_GetError());
@@ -180,6 +205,8 @@ int main(int argc, char* argv[]) {
       if (shootTimer >= shootDelay) {
         shootTimer = 0;
 
+        playSound(shootSound);
+
         for (int i = 0; i < MAX_BULLETS; i++) {
           if (!bullets[i].active) {
             bullets[i].x = leftGun;
@@ -258,6 +285,7 @@ int main(int argc, char* argv[]) {
 
         if (SDL_HasIntersection(&plane, &en)) {
           enemies[i].active = 0;
+          playSound(hitsound);
           lives--;
 
           printf("Lives: %d\n", lives);
@@ -316,6 +344,8 @@ int main(int argc, char* argv[]) {
   IMG_Quit();
   SDL_Quit();
 
+  Mix_FreeChunk(shootSound);
+  cleanupAudio();
+
   return 0;
 }
-
