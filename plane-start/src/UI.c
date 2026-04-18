@@ -1,107 +1,109 @@
 #include "../include/UI.h"
 #include <SDL2/SDL_ttf.h>
-#include <stdlib.h>  // for exit()
+#include <stdlib.h>
 
-Button initializeButton(int w, int h, SDL_Color top, SDL_Color bottom, SDL_Color text, const char* label)
+Button initializeButton(int w, int h, SDL_Texture* bg, SDL_Color text, const char* label)
 {
     Button b;
     b.rect.w = w;
     b.rect.h = h;
-    b.rect.x = 0; // will be set by layout
+    b.rect.x = 0;
     b.rect.y = 0;
-    b.topColor = top;
-    b.bottomColor = bottom;
+    b.bgTexture = bg;
     b.textColor = text;
     b.isHovered = false;
     b.label = label;
     return b;
 }
 
-// --- Layout helper: bottom center ---
 void centerButtonBottom(Button* b, SDL_Rect parent, int padding)
 {
     b->rect.x = parent.x + (parent.w - b->rect.w) / 2;
     b->rect.y = parent.y + parent.h - b->rect.h - padding;
 }
 
-// --- Render menu with button ---
-void renderMenu(SDL_Renderer* renderer, Button* button, TTF_Font* font)
+void layoutButtons(Button* buttons, int count, SDL_Rect box, int startOffsetY, int spacing)
+{
+    for (int i = 0; i < count; i++)
+    {
+        buttons[i].rect.x = box.x + (box.w - buttons[i].rect.w) / 2;
+        buttons[i].rect.y = box.y + startOffsetY + i * (buttons[i].rect.h + spacing);
+    }
+}
+
+void drawMenuBackground(SDL_Renderer* renderer, int w, int h)
+{
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(renderer, 0, 0, 128, 200);
+    SDL_Rect overlay = {0, 0, w, h};
+    SDL_RenderFillRect(renderer, &overlay);
+}
+
+void drawMenuBox(SDL_Renderer* renderer, SDL_Rect box)
+{
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+    SDL_RenderFillRect(renderer, &box);
+}
+
+SDL_Rect createMenuBox(int screenW, int screenH)
+{
+    SDL_Rect box;
+    box.w = 600;
+    box.h = 400;
+    box.x = screenW / 2 - box.w / 2;
+    box.y = screenH / 2 - box.h / 2;
+    return box;
+}
+
+void renderMenu(SDL_Renderer* renderer, Button* buttons, int count, TTF_Font* font)
 {
     int w, h;
     SDL_GetRendererOutputSize(renderer, &w, &h);
-
-    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-
-    // Overlay
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 200);
-    SDL_Rect overlay = {0, 0, w, h};
-    SDL_RenderFillRect(renderer, &overlay);
-
-    // Menu box
-    int baseW = 300;
-    int baseH = 200;
-
-    // Apply scaling
-    int menuW = (int)(baseW * 2);
-    int menuH = (int)(baseH * 2);
-
-    // Center it
-    SDL_Rect box = {
-        w/2 - menuW/2,
-        h/2 - menuH/2,
-        menuW,
-        menuH
-    };
-    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-    SDL_RenderFillRect(renderer, &box);
-
-    // Layout button at bottom
-    centerButtonBottom(button, box, 20);
-
-    renderButton(renderer, button, font);
+    SDL_Rect box = createMenuBox(w, h);
+    drawMenuBackground(renderer, w, h);
+    drawMenuBox(renderer, box);
+    layoutButtons(buttons, count, box, 80, 20);
+    for (int i = 0; i < count; i++)
+        renderButton(renderer, &buttons[i], font);
 }
 
-// --- Render a button with vertical gradient and shadow ---
 void renderButton(SDL_Renderer* renderer, Button* b, TTF_Font* font)
 {
-    // --- Draw shadow ---
+    // --- Shadow ---
     SDL_Rect shadowRect = b->rect;
     shadowRect.x += 4;
     shadowRect.y += 4;
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 128);
     SDL_RenderFillRect(renderer, &shadowRect);
 
-    // --- Draw gradient button ---
-    SDL_Color top = b->topColor;
-    SDL_Color bottom = b->bottomColor;
-    int h = b->rect.h;
-    
-    Uint8 gradiant = bottom.r - top.r;
-    for (int y = 0; y < h; y++) {
-        float t = (float)y / h;
-        Uint8 r = top.r + t * (bottom.r - top.r);
-        Uint8 g = top.g + t * (bottom.g - top.g);
-        Uint8 bl = top.b + t * (bottom.b - top.b);
-        Uint8 a = top.a + t * (bottom.a - top.a);
-        SDL_SetRenderDrawColor(renderer, r, g, bl, a);
-        SDL_RenderDrawLine(renderer, b->rect.x, b->rect.y + y, b->rect.x + b->rect.w, b->rect.y + y); //Ritar en Horizontell linje
+    // --- Background texture ---
+    if (b->bgTexture) {
+        if (b->isHovered)
+            SDL_SetTextureColorMod(b->bgTexture, 180, 180, 180);
+        else
+            SDL_SetTextureColorMod(b->bgTexture, 255, 255, 255);
+
+        SDL_RenderCopy(renderer, b->bgTexture, NULL, &b->rect);
+    } else {
+        // Fallback: solid color if no texture loaded
+        SDL_SetRenderDrawColor(renderer, 0, 128, 255, 255);
+        SDL_RenderFillRect(renderer, &b->rect);
     }
 
-    // --- Draw text ---
+    // --- Text ---
     SDL_Surface* surface = TTF_RenderText_Blended(font, b->label, b->textColor);
     SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
-
     int textW = surface->w;
     int textH = surface->h;
     SDL_FreeSurface(surface);
 
     SDL_Rect textRect = {
-        b->rect.x + (b->rect.w - textW)/2,
-        b->rect.y + (b->rect.h - textH)/2,
+        b->rect.x + (b->rect.w - textW) / 2,
+        b->rect.y + (b->rect.h - textH) / 2,
         textW,
         textH
     };
     SDL_RenderCopy(renderer, texture, NULL, &textRect);
     SDL_DestroyTexture(texture);
 }
-// --- Handle hover and click ---
