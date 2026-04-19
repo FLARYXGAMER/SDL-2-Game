@@ -45,21 +45,21 @@ void drawMenuBox(SDL_Renderer* renderer, SDL_Rect box)
     SDL_RenderFillRect(renderer, &box);
 }
 
-SDL_Rect createMenuBox(int screenW, int screenH)
+SDL_Rect createMenuBox(int screenW, int screenH, int sizeW, int sizeH)
 {
     SDL_Rect box;
-    box.w = 600;
-    box.h = 400;
+    box.w = sizeW;
+    box.h = sizeH;
     box.x = screenW / 2 - box.w / 2;
     box.y = screenH / 2 - box.h / 2;
     return box;
 }
 
-void renderMenu(SDL_Renderer* renderer, Button* buttons, int count, TTF_Font* font)
+void renderMenu(SDL_Renderer* renderer, Button buttons[], int count, TTF_Font* font, int sizeW, int sizeH)
 {
     int w, h;
     SDL_GetRendererOutputSize(renderer, &w, &h);
-    SDL_Rect box = createMenuBox(w, h);
+    SDL_Rect box = createMenuBox(w, h, sizeW, sizeH);
     drawMenuBackground(renderer, w, h);
     drawMenuBox(renderer, box);
     layoutButtons(buttons, count, box, 80, 20);

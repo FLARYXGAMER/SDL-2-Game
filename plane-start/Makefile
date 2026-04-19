@@ -7,7 +7,7 @@ SDL_PATH = C:/SDL2
 CFLAGS = -Iinclude -I$(SDL_PATH)/include
 
 # Linker flags (IMPORTANT: SDL2_mixer added)
-LDFLAGS = -L$(SDL_PATH)/lib -lSDL2_mixer -lSDL2_ttf -lSDL2_image -lSDL2 -lm
+LDFLAGS = -L$(SDL_PATH)/lib -lSDL2_mixer -lSDL2_ttf -lSDL2_image -lSDL2 -lm -lpthread
 
 # Source files
 SRC = $(wildcard src/*.c)

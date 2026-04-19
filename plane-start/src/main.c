@@ -6,7 +6,7 @@
 #include <time.h>
 #include <math.h>
 #include <stdbool.h>
-
+#include "network.h"
 #include "UI.h"
 #include "sound.h"
 
@@ -72,15 +72,6 @@ void handleButtonEvents(Button* b, SDL_Event* event, GameState* state)
     int mx, my;
     SDL_GetMouseState(&mx, &my);
 
-    // Inset the hit area to match the visible button shape
-    int pad = 10; // adjust this to match your button's transparent border
-    SDL_Rect hitRect = {
-        b->rect.x + pad,
-        b->rect.y + pad,
-        b->rect.w - pad * 2,
-        b->rect.h - pad * 2
-    };
-
     b->isHovered = SDL_PointInRect(&(SDL_Point){mx, my}, &b->rect);
 
     if (event->type == SDL_MOUSEBUTTONDOWN &&
@@ -95,6 +86,13 @@ void handleButtonEvents(Button* b, SDL_Event* event, GameState* state)
 
             if (strcmp(b->label, "Quit") == 0)
                 *state = STATE_QUIT;
+            if (strcmp(b->label, "Client") == 0)
+                testClientFun();
+            if (strcmp(b->label, "Server") == 0) {
+                pthread_t t;
+                pthread_create(&t, NULL, serverThread, NULL);
+                pthread_detach(t);
+            }
         }
 
         // -------- PAUSE MENU --------
@@ -105,6 +103,7 @@ void handleButtonEvents(Button* b, SDL_Event* event, GameState* state)
 
             if (strcmp(b->label, "Quit") == 0)
                 *state = STATE_QUIT;
+
         }
     }
 }
@@ -150,8 +149,10 @@ int main(int argc, char* argv[])
     Button quitButton   = initializeButton(200*scale, 60 *scale, buttonTex, text, "Quit");
     Button resumeButton = initializeButton(200*scale, 60 *scale, buttonTex, text, "Resume");
     Button quitButton2  = initializeButton(200*scale, 60 *scale, buttonTex, text, "Quit");
+    Button serverButton = initializeButton(200*scale, 60 *scale, buttonTex, text, "Server");
+    Button clientButton = initializeButton(200*scale, 60 *scale, buttonTex, text, "Client");
 
-    Button mainMenuButtons[]  = { startButton,  quitButton  };
+    Button mainMenuButtons[]  = { startButton,  quitButton, serverButton, clientButton};
     Button pauseMenuButtons[] = { resumeButton, quitButton2 };
 
     // ---------------- GAME STATE ----------------
@@ -185,7 +186,7 @@ int main(int argc, char* argv[])
 
             if (state == STATE_MAIN_MENU)
             {
-                for (int i = 0; i < 2; i++)
+                for (int i = 0; i < 4; i++)
                     handleButtonEvents(&mainMenuButtons[i], &e, &state);
             }
             else if (state == STATE_PAUSE_MENU)
@@ -202,7 +203,7 @@ int main(int argc, char* argv[])
         // ================= MAIN MENU =================
         if (state == STATE_MAIN_MENU)
         {
-            renderMenu(renderer, mainMenuButtons, 2, font);
+            renderMenu(renderer, mainMenuButtons, 4, font, 400, 600);
         }
 
         // ================= PLAYING =================
@@ -354,7 +355,7 @@ int main(int argc, char* argv[])
         // ================= PAUSE MENU =================
         else if (state == STATE_PAUSE_MENU)
         {
-            renderMenu(renderer, pauseMenuButtons, 2, font);
+            renderMenu(renderer, pauseMenuButtons, 2, font, 400, 600);
         }
 
         // ================= QUIT =================
