@@ -63,6 +63,6 @@ void testClientFun()
 }
 void* serverThread(void* arg)
 {
-    testServerFun(NULL);
+    testServerFun();
     return NULL;
 }
