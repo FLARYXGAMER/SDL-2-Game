@@ -78,7 +78,6 @@ void handleButtonEvents(Button* b, SDL_Event* event, GameState* state)
         event->button.button == SDL_BUTTON_LEFT &&
         b->isHovered)
     {
-        // -------- MAIN MENU --------
         if (*state == STATE_MAIN_MENU)
         {
             if (strcmp(b->label, "Start") == 0)
@@ -94,8 +93,6 @@ void handleButtonEvents(Button* b, SDL_Event* event, GameState* state)
                 pthread_detach(t);
             }
         }
-
-        // -------- PAUSE MENU --------
         else if (*state == STATE_PAUSE_MENU)
         {
             if (strcmp(b->label, "Resume") == 0)
@@ -103,7 +100,6 @@ void handleButtonEvents(Button* b, SDL_Event* event, GameState* state)
 
             if (strcmp(b->label, "Quit") == 0)
                 *state = STATE_QUIT;
-
         }
     }
 }
@@ -130,20 +126,19 @@ int main(int argc, char* argv[])
     SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
     TTF_Font* font = TTF_OpenFont("resources/fonts/DejaVuSans.ttf", 24);
 
-    // ---------------- TEXTURES ----------------
     SDL_Texture* planeTex  = loadTexture(renderer, "resources/plane1.png");
     SDL_Texture* bulletTex = loadTexture(renderer, "resources/test-bullet.png");
     SDL_Texture* enemyTex  = loadTexture(renderer, "resources/plane5.png");
     SDL_Texture* heartTex  = loadTexture(renderer, "resources/heart.png");
 
-    // ---------------- SOUND ----------------
     Mix_Chunk* shootSound = loadSound("resources/sounds/bullet.wav");
     Mix_Chunk* hitSound   = loadSound("resources/sounds/roblox.wav");
 
-    // ---------------- BUTTONS ----------------
     SDL_Texture* buttonTex = loadTexture(renderer, "resources/buttonPictures/Button.png");
+
     SDL_SetTextureBlendMode(buttonTex, SDL_BLENDMODE_BLEND);
     SDL_Color text = {255, 255, 255, 255};
+
     float scale = 1.5;
     Button startButton  = initializeButton(200*scale, 60 *scale, buttonTex, text, "Start");
     Button quitButton   = initializeButton(200*scale, 60 *scale, buttonTex, text, "Quit");
@@ -155,10 +150,8 @@ int main(int argc, char* argv[])
     Button mainMenuButtons[]  = { startButton,  quitButton, serverButton, clientButton};
     Button pauseMenuButtons[] = { resumeButton, quitButton2 };
 
-    // ---------------- GAME STATE ----------------
     GameState state = STATE_MAIN_MENU;
 
-    // ---------------- PLAYER ----------------
     SDL_Rect plane = {SCREEN_WIDTH/2 - 32, SCREEN_HEIGHT - 80, 64, 64};
 
     Bullet bullets[MAX_BULLETS] = {0};
@@ -172,10 +165,8 @@ int main(int argc, char* argv[])
     SDL_Event e;
     bool running = true;
 
-    // ---------------- MAIN LOOP ----------------
     while (running)
     {
-        // ============ INPUT ============
         while (SDL_PollEvent(&e))
         {
             if (e.type == SDL_QUIT)
@@ -196,17 +187,13 @@ int main(int argc, char* argv[])
             }
         }
 
-        // ============ RENDER CLEAR ============
         SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
         SDL_RenderClear(renderer);
 
-        // ================= MAIN MENU =================
         if (state == STATE_MAIN_MENU)
         {
             renderMenu(renderer, mainMenuButtons, 4, font, 400, 600);
         }
-
-        // ================= PLAYING =================
         else if (state == STATE_PLAYING)
         {
             const Uint8* keys = SDL_GetKeyboardState(NULL);
@@ -216,14 +203,13 @@ int main(int argc, char* argv[])
             if (keys[SDL_SCANCODE_UP])    plane.y -= 5;
             if (keys[SDL_SCANCODE_DOWN])  plane.y += 5;
 
-            // bounds
             if (plane.x < 0) plane.x = 0;
             if (plane.y < 0) plane.y = 0;
             if (plane.x > SCREEN_WIDTH - plane.w) plane.x = SCREEN_WIDTH - plane.w;
             if (plane.y > SCREEN_HEIGHT - plane.h) plane.y = SCREEN_HEIGHT - plane.h;
 
-            // ---------------- SHOOT ----------------
             shootTimer++;
+
             int leftGun = plane.x + plane.w/4 - 8;
             int rightGun = plane.x + 3*plane.w/4 - 8;
 
@@ -255,18 +241,14 @@ int main(int argc, char* argv[])
                 }
             }
 
-            // ---------------- BULLETS ----------------
             for (int i = 0; i < MAX_BULLETS; i++)
-            {
                 if (bullets[i].active)
                 {
                     bullets[i].y -= 8;
                     if (bullets[i].y < 0)
                         bullets[i].active = 0;
                 }
-            }
 
-            // ---------------- ENEMIES ----------------
             for (int i = 0; i < MAX_ENEMIES; i++)
             {
                 if (!enemies[i].active && rand()%1000 < 5)
@@ -289,7 +271,6 @@ int main(int argc, char* argv[])
                 }
             }
 
-            // ---------------- COLLISIONS ----------------
             for (int i = 0; i < MAX_BULLETS; i++)
             for (int j = 0; j < MAX_ENEMIES; j++)
             {
@@ -323,7 +304,6 @@ int main(int argc, char* argv[])
                 }
             }
 
-            // ---------------- RENDER GAME ----------------
             SDL_RenderCopy(renderer, planeTex, NULL, &plane);
 
             SDL_Rect r = {0,0,16,16};
@@ -350,15 +330,28 @@ int main(int argc, char* argv[])
                 hr.x = 10 + i * 40;
                 SDL_RenderCopy(renderer, heartTex, NULL, &hr);
             }
-        }
 
-        // ================= PAUSE MENU =================
+            // ================= SCORE (TOP RIGHT) =================
+            char scoreText[64];
+            sprintf(scoreText, "Score: %d", score);
+
+            SDL_Surface* scoreSurface = TTF_RenderText_Blended(font, scoreText, (SDL_Color){0,0,0,255});
+            SDL_Texture* scoreTexture = SDL_CreateTextureFromSurface(renderer, scoreSurface);
+
+            int tw, th;
+            SDL_QueryTexture(scoreTexture, NULL, NULL, &tw, &th);
+
+            SDL_Rect scoreRect = {SCREEN_WIDTH - tw - 20, 10, tw, th};
+
+            SDL_RenderCopy(renderer, scoreTexture, NULL, &scoreRect);
+
+            SDL_FreeSurface(scoreSurface);
+            SDL_DestroyTexture(scoreTexture);
+        }
         else if (state == STATE_PAUSE_MENU)
         {
             renderMenu(renderer, pauseMenuButtons, 2, font, 400, 600);
         }
-
-        // ================= QUIT =================
         else if (state == STATE_QUIT)
         {
             running = false;
