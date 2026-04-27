@@ -43,6 +43,17 @@ typedef struct {
     int active;
 } Enemy;
 
+void resetLocalGame(SDL_Rect* plane, Bullet bullets[], Enemy enemies[], int* lives, int* score, int* shootTimer)
+{
+    plane->x = SCREEN_WIDTH / 2 - 32;
+    plane->y = SCREEN_HEIGHT - 80;
+    memset(bullets, 0, sizeof(Bullet) * MAX_BULLETS);
+    memset(enemies, 0, sizeof(Enemy) * MAX_ENEMIES);
+    *lives = PLAYER_LIVES;
+    *score = 0;
+    *shootTimer = 0;
+}
+
 // ---------------- HELPERS ----------------
 SDL_Texture* loadTexture(SDL_Renderer* renderer, const char* path)
 {
@@ -227,7 +238,11 @@ int main(int argc, char* argv[])
                 else
                 {
                     if (netState.gameOver)
-                        state = STATE_QUIT;
+                    {
+                        networkClientDisconnect();
+                        state = STATE_MAIN_MENU;
+                        mode = MODE_LOCAL;
+                    }
 
                     SDL_Texture* playerTextures[NET_MAX_PLAYERS] = {planeTex, planeTex2};
                     for (int i = 0; i < NET_MAX_PLAYERS; i++)
@@ -394,7 +409,10 @@ int main(int argc, char* argv[])
                     lives--;
 
                     if (lives <= 0)
-                        state = STATE_QUIT;
+                    {
+                        resetLocalGame(&plane, bullets, enemies, &lives, &score, &shootTimer);
+                        state = STATE_MAIN_MENU;
+                    }
                 }
             }
 

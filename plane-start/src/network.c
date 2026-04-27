@@ -297,7 +297,7 @@ void testServerFun(void)
             }
         }
 
-        SDL_Delay(16);
+        SDL_Delay(8);
     }
 
     for (int i = 0; i < NET_MAX_PLAYERS; i++)
@@ -368,7 +368,6 @@ static int clientThread(void* arg)
         clientPlayerId = stateCopy.playerId;
         SDL_UnlockMutex(clientMutex);
 
-        SDL_Delay(16);
     }
 
     SDL_LockMutex(clientMutex);
@@ -438,6 +437,13 @@ int networkClientConnect(const char* host)
 
 void networkClientDisconnect(void)
 {
+    if (clientMutex)
+    {
+        SDL_LockMutex(clientMutex);
+        clientConnected = 0;
+        SDL_UnlockMutex(clientMutex);
+    }
+
     clientRunning = 0;
 }
 
