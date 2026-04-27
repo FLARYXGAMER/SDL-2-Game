@@ -1,68 +1,111 @@
 #include <stdio.h>
 #include <string.h>
-#include <sys/socket.h>
-#include <arpa/inet.h>
-#include <unistd.h>
+#include <SDL2/SDL.h>
+#include <SDL2/SDL_net.h>
+#include "../include/network.h"
 
-#define PORT 8080
-#define SERVER_IP "127.0.0.1"
-
-void testServerFun()
+static int networkInit(void)
 {
-    int server_fd, client_fd;
-    struct sockaddr_in addr;
+    static int initialized = 0;
+
+    if (initialized)
+        return 0;
+
+    if (SDLNet_Init() < 0)
+    {
+        printf("Network: SDL_net init failed: %s\n", SDLNet_GetError());
+        return -1;
+    }
+
+    initialized = 1;
+    return 0;
+}
+
+void testServerFun(void)
+{
+    IPaddress ip;
+    TCPsocket serverSocket;
+    TCPsocket clientSocket;
     char buffer[1024] = {0};
-    int opt = 1;
 
-    server_fd = socket(AF_INET, SOCK_STREAM, 0);
-    setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+    if (networkInit() != 0)
+        return;
 
-    addr.sin_family      = AF_INET;
-    addr.sin_addr.s_addr = INADDR_ANY;
-    addr.sin_port        = htons(PORT);
+    if (SDLNet_ResolveHost(&ip, NULL, PORT) < 0)
+    {
+        printf("Server: could not resolve host: %s\n", SDLNet_GetError());
+        return;
+    }
 
-    bind(server_fd, (struct sockaddr*)&addr, sizeof(addr));
-    listen(server_fd, 1);
+    serverSocket = SDLNet_TCP_Open(&ip);
+    if (!serverSocket)
+    {
+        printf("Server: could not open socket: %s\n", SDLNet_GetError());
+        return;
+    }
 
     printf("Server: waiting for connection on port %d...\n", PORT);
 
-    client_fd = accept(server_fd, NULL, NULL);
-    read(client_fd, buffer, sizeof(buffer));
-    printf("Server received: %s\n", buffer);
-    send(client_fd, "Hello from server!", 18, 0);
+    do
+    {
+        clientSocket = SDLNet_TCP_Accept(serverSocket);
+        SDL_Delay(10);
+    } while (!clientSocket);
 
-    close(client_fd);
-    close(server_fd);
+    SDLNet_TCP_Recv(clientSocket, buffer, sizeof(buffer) - 1);
+    printf("Server received: %s\n", buffer);
+    SDLNet_TCP_Send(clientSocket, "Hello from server!", 18);
+
+    SDLNet_TCP_Close(clientSocket);
+    SDLNet_TCP_Close(serverSocket);
 }
 
-void testClientFun()
+void testClientFun(void)
 {
-    int sock;
-    struct sockaddr_in addr;
+    IPaddress ip;
+    TCPsocket socket;
     char buffer[1024] = {0};
 
-    sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (networkInit() != 0)
+        return;
 
-    addr.sin_family = AF_INET;
-    addr.sin_port   = htons(PORT);
-    inet_pton(AF_INET, SERVER_IP, &addr.sin_addr);
-
-    if (connect(sock, (struct sockaddr*)&addr, sizeof(addr)) < 0)
+    if (SDLNet_ResolveHost(&ip, SERVER_IP, PORT) < 0)
     {
-        printf("Client: connection failed\n");
-        close(sock);
+        printf("Client: could not resolve server: %s\n", SDLNet_GetError());
+        return;
+    }
+
+    socket = SDLNet_TCP_Open(&ip);
+    if (!socket)
+    {
+        printf("Client: connection failed: %s\n", SDLNet_GetError());
         return;
     }
 
     printf("Client: connected!\n");
-    send(sock, "Hello from client!", 18, 0);
-    read(sock, buffer, sizeof(buffer));
+    SDLNet_TCP_Send(socket, "Hello from client!", 18);
+    SDLNet_TCP_Recv(socket, buffer, sizeof(buffer) - 1);
     printf("Client received: %s\n", buffer);
 
-    close(sock);
+    SDLNet_TCP_Close(socket);
 }
-void* serverThread(void* arg)
+
+static int serverThread(void* arg)
 {
+    (void)arg;
     testServerFun();
-    return NULL;
+    return 0;
+}
+
+int startServerThread(void)
+{
+    SDL_Thread* thread = SDL_CreateThread(serverThread, "serverThread", NULL);
+    if (!thread)
+    {
+        printf("Server: could not start thread: %s\n", SDL_GetError());
+        return -1;
+    }
+
+    SDL_DetachThread(thread);
+    return 0;
 }

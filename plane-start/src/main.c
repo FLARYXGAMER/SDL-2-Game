@@ -87,11 +87,8 @@ void handleButtonEvents(Button* b, SDL_Event* event, GameState* state)
                 *state = STATE_QUIT;
             if (strcmp(b->label, "Client") == 0)
                 testClientFun();
-            if (strcmp(b->label, "Server") == 0) {
-                pthread_t t;
-                pthread_create(&t, NULL, serverThread, NULL);
-                pthread_detach(t);
-            }
+            if (strcmp(b->label, "Server") == 0)
+                startServerThread();
         }
         else if (*state == STATE_PAUSE_MENU)
         {
