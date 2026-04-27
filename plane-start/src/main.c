@@ -25,6 +25,11 @@ typedef enum {
     STATE_QUIT
 } GameState;
 
+typedef enum {
+    MODE_LOCAL,
+    MODE_CLIENT
+} PlayMode;
+
 // ---------------- GAME OBJECTS ----------------
 typedef struct {
     float x, y;
@@ -67,7 +72,7 @@ void handleKeyDown(SDL_Event* event, GameState* state)
 }
 
 // ---------------- BUTTON HANDLING ----------------
-void handleButtonEvents(Button* b, SDL_Event* event, GameState* state)
+void handleButtonEvents(Button* b, SDL_Event* event, GameState* state, PlayMode* mode, const char* serverHost)
 {
     int mx, my;
     SDL_GetMouseState(&mx, &my);
@@ -86,7 +91,13 @@ void handleButtonEvents(Button* b, SDL_Event* event, GameState* state)
             if (strcmp(b->label, "Quit") == 0)
                 *state = STATE_QUIT;
             if (strcmp(b->label, "Client") == 0)
-                testClientFun();
+            {
+                if (networkClientConnect(serverHost) == 0)
+                {
+                    *mode = MODE_CLIENT;
+                    *state = STATE_PLAYING;
+                }
+            }
             if (strcmp(b->label, "Server") == 0)
                 startServerThread();
         }
@@ -105,6 +116,7 @@ void handleButtonEvents(Button* b, SDL_Event* event, GameState* state)
 int main(int argc, char* argv[])
 {
     srand(time(NULL));
+    const char* serverHost = argc > 1 ? argv[1] : SERVER_IP;
 
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
     IMG_Init(IMG_INIT_PNG);
@@ -124,6 +136,7 @@ int main(int argc, char* argv[])
     TTF_Font* font = TTF_OpenFont("resources/fonts/DejaVuSans.ttf", 24);
 
     SDL_Texture* planeTex  = loadTexture(renderer, "resources/plane1.png");
+    SDL_Texture* planeTex2 = loadTexture(renderer, "resources/plane2.png");
     SDL_Texture* bulletTex = loadTexture(renderer, "resources/test-bullet.png");
     SDL_Texture* enemyTex  = loadTexture(renderer, "resources/plane5.png");
     SDL_Texture* heartTex  = loadTexture(renderer, "resources/heart.png");
@@ -148,6 +161,7 @@ int main(int argc, char* argv[])
     Button pauseMenuButtons[] = { resumeButton, quitButton2 };
 
     GameState state = STATE_MAIN_MENU;
+    PlayMode mode = MODE_LOCAL;
 
     SDL_Rect plane = {SCREEN_WIDTH/2 - 32, SCREEN_HEIGHT - 80, 64, 64};
 
@@ -175,12 +189,12 @@ int main(int argc, char* argv[])
             if (state == STATE_MAIN_MENU)
             {
                 for (int i = 0; i < 4; i++)
-                    handleButtonEvents(&mainMenuButtons[i], &e, &state);
+                    handleButtonEvents(&mainMenuButtons[i], &e, &state, &mode, serverHost);
             }
             else if (state == STATE_PAUSE_MENU)
             {
                 for (int i = 0; i < 2; i++)
-                    handleButtonEvents(&pauseMenuButtons[i], &e, &state);
+                    handleButtonEvents(&pauseMenuButtons[i], &e, &state, &mode, serverHost);
             }
         }
 
@@ -194,6 +208,89 @@ int main(int argc, char* argv[])
         else if (state == STATE_PLAYING)
         {
             const Uint8* keys = SDL_GetKeyboardState(NULL);
+
+            if (mode == MODE_CLIENT)
+            {
+                NetGameState netState;
+                networkClientSetInput(
+                    keys[SDL_SCANCODE_LEFT],
+                    keys[SDL_SCANCODE_RIGHT],
+                    keys[SDL_SCANCODE_UP],
+                    keys[SDL_SCANCODE_DOWN]
+                );
+
+                if (!networkClientGetState(&netState))
+                {
+                    state = STATE_MAIN_MENU;
+                    mode = MODE_LOCAL;
+                }
+                else
+                {
+                    if (netState.gameOver)
+                        state = STATE_QUIT;
+
+                    SDL_Texture* playerTextures[NET_MAX_PLAYERS] = {planeTex, planeTex2};
+                    for (int i = 0; i < NET_MAX_PLAYERS; i++)
+                    {
+                        if (!netState.players[i].active)
+                            continue;
+
+                        SDL_Rect playerRect = {
+                            (int)netState.players[i].x,
+                            (int)netState.players[i].y,
+                            64,
+                            64
+                        };
+                        SDL_RenderCopy(renderer, playerTextures[i], NULL, &playerRect);
+                    }
+
+                    SDL_Rect r = {0, 0, 16, 16};
+                    for (int i = 0; i < NET_MAX_BULLETS; i++)
+                    {
+                        if (!netState.bullets[i].active)
+                            continue;
+
+                        r.x = (int)netState.bullets[i].x;
+                        r.y = (int)netState.bullets[i].y;
+                        SDL_RenderCopyEx(renderer, bulletTex, NULL, &r, -90, NULL, SDL_FLIP_NONE);
+                    }
+
+                    SDL_Rect er = {0, 0, 64, 64};
+                    for (int i = 0; i < NET_MAX_ENEMIES; i++)
+                    {
+                        if (!netState.enemies[i].active)
+                            continue;
+
+                        er.x = (int)netState.enemies[i].x;
+                        er.y = (int)netState.enemies[i].y;
+                        SDL_RenderCopyEx(renderer, enemyTex, NULL, &er, 0, NULL, SDL_FLIP_VERTICAL);
+                    }
+
+                    SDL_Rect hr = {10, 10, 32, 32};
+                    for (int i = 0; i < netState.lives; i++)
+                    {
+                        hr.x = 10 + i * 40;
+                        SDL_RenderCopy(renderer, heartTex, NULL, &hr);
+                    }
+
+                    char statusText[96];
+                    sprintf(statusText, "P%d  Players: %d  Score: %d",
+                            netState.playerId + 1,
+                            netState.connectedPlayers,
+                            netState.score);
+
+                    SDL_Surface* statusSurface = TTF_RenderText_Blended(font, statusText, (SDL_Color){0,0,0,255});
+                    SDL_Texture* statusTexture = SDL_CreateTextureFromSurface(renderer, statusSurface);
+                    int tw, th;
+                    SDL_QueryTexture(statusTexture, NULL, NULL, &tw, &th);
+                    SDL_Rect statusRect = {SCREEN_WIDTH - tw - 20, 10, tw, th};
+                    SDL_RenderCopy(renderer, statusTexture, NULL, &statusRect);
+                    SDL_FreeSurface(statusSurface);
+                    SDL_DestroyTexture(statusTexture);
+                }
+            }
+            else
+            {
 
             if (keys[SDL_SCANCODE_LEFT])  plane.x -= 5;
             if (keys[SDL_SCANCODE_RIGHT]) plane.x += 5;
@@ -344,6 +441,7 @@ int main(int argc, char* argv[])
 
             SDL_FreeSurface(scoreSurface);
             SDL_DestroyTexture(scoreTexture);
+            }
         }
         else if (state == STATE_PAUSE_MENU)
         {
