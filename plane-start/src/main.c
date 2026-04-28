@@ -6,6 +6,7 @@
 #include <time.h>
 #include <math.h>
 #include <stdbool.h>
+#include <string.h>
 #include "network.h"
 #include "UI.h"
 #include "sound.h"
@@ -22,6 +23,7 @@ typedef enum {
     STATE_MAIN_MENU,
     STATE_PLAYING,
     STATE_PAUSE_MENU,
+    STATE_GAME_OVER,
     STATE_QUIT
 } GameState;
 
@@ -66,6 +68,76 @@ SDL_Texture* loadTexture(SDL_Renderer* renderer, const char* path)
     SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, surf);
     SDL_FreeSurface(surf);
     return tex;
+}
+
+void drawCenterText(SDL_Renderer* renderer, TTF_Font* font, const char* text, int y, SDL_Color color)
+{
+    SDL_Surface* surface = TTF_RenderText_Blended(font, text, color);
+    SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
+
+    int w, h;
+    SDL_QueryTexture(texture, NULL, NULL, &w, &h);
+
+    SDL_Rect rect = {
+        SCREEN_WIDTH / 2 - w / 2,
+        y,
+        w,
+        h
+    };
+
+    SDL_RenderCopy(renderer, texture, NULL, &rect);
+
+    SDL_FreeSurface(surface);
+    SDL_DestroyTexture(texture);
+}
+
+void renderGameOverMenu(SDL_Renderer* renderer, TTF_Font* font, SDL_Texture* buttonTex, int finalScore)
+{
+    SDL_Color white = {255, 255, 255, 255};
+    SDL_Color cyan  = {0, 230, 255, 255};
+    SDL_Color red   = {255, 70, 70, 255};
+
+    SDL_SetRenderDrawColor(renderer, 55, 55, 150, 255);
+    SDL_RenderClear(renderer);
+
+    SDL_Rect panel = {
+        SCREEN_WIDTH / 2 - 360,
+        110,
+        720,
+        590
+    };
+
+    SDL_SetRenderDrawColor(renderer, 20, 25, 60, 255);
+    SDL_RenderFillRect(renderer, &panel);
+
+    SDL_SetRenderDrawColor(renderer, 0, 220, 255, 255);
+    SDL_RenderDrawRect(renderer, &panel);
+
+    drawCenterText(renderer, font, "GAME OVER", 170, red);
+
+    char scoreText[128];
+    sprintf(scoreText, "YOUR SCORE: %d", finalScore);
+    drawCenterText(renderer, font, scoreText, 250, cyan);
+
+    SDL_Rect playAgainRect = {
+        SCREEN_WIDTH / 2 - 230,
+        380,
+        460,
+        95
+    };
+
+    SDL_Rect quitRect = {
+        SCREEN_WIDTH / 2 - 230,
+        510,
+        460,
+        95
+    };
+
+    SDL_RenderCopy(renderer, buttonTex, NULL, &playAgainRect);
+    SDL_RenderCopy(renderer, buttonTex, NULL, &quitRect);
+
+    drawCenterText(renderer, font, "PLAY AGAIN", 410, white);
+    drawCenterText(renderer, font, "QUIT", 540, white);
 }
 
 // ---------------- STATE INPUT ----------------
@@ -183,6 +255,7 @@ int main(int argc, char* argv[])
     int shootDelay = 10;
     int lives = PLAYER_LIVES;
     int score = 0;
+    int finalScore = 0;
 
     SDL_Event e;
     bool running = true;
@@ -206,6 +279,39 @@ int main(int argc, char* argv[])
             {
                 for (int i = 0; i < 2; i++)
                     handleButtonEvents(&pauseMenuButtons[i], &e, &state, &mode, serverHost);
+            }
+            else if (state == STATE_GAME_OVER)
+            {
+                int mx, my;
+                SDL_GetMouseState(&mx, &my);
+
+                SDL_Rect playAgainRect = {
+                    SCREEN_WIDTH / 2 - 230,
+                    380,
+                    460,
+                    95
+                };
+
+                SDL_Rect quitRect = {
+                    SCREEN_WIDTH / 2 - 230,
+                    510,
+                    460,
+                    95
+                };
+
+                if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT)
+                {
+                    if (SDL_PointInRect(&(SDL_Point){mx, my}, &playAgainRect))
+                    {
+                        resetLocalGame(&plane, bullets, enemies, &lives, &score, &shootTimer);
+                        state = STATE_PLAYING;
+                    }
+
+                    if (SDL_PointInRect(&(SDL_Point){mx, my}, &quitRect))
+                    {
+                        state = STATE_QUIT;
+                    }
+                }
             }
         }
 
@@ -410,8 +516,8 @@ int main(int argc, char* argv[])
 
                     if (lives <= 0)
                     {
-                        resetLocalGame(&plane, bullets, enemies, &lives, &score, &shootTimer);
-                        state = STATE_MAIN_MENU;
+                        finalScore = score;
+                        state = STATE_GAME_OVER;
                     }
                 }
             }
@@ -443,7 +549,6 @@ int main(int argc, char* argv[])
                 SDL_RenderCopy(renderer, heartTex, NULL, &hr);
             }
 
-            // ================= SCORE (TOP RIGHT) =================
             char scoreText[64];
             sprintf(scoreText, "Score: %d", score);
 
@@ -460,6 +565,10 @@ int main(int argc, char* argv[])
             SDL_FreeSurface(scoreSurface);
             SDL_DestroyTexture(scoreTexture);
             }
+        }
+        else if (state == STATE_GAME_OVER)
+        {
+            renderGameOverMenu(renderer, font, buttonTex, finalScore);
         }
         else if (state == STATE_PAUSE_MENU)
         {
