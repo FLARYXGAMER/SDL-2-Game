@@ -2,9 +2,9 @@
 #define GAME_H
 
 #include <SDL2/SDL.h>
-#include <SDL2/SDL_mixer.h>
 #include <SDL2/SDL_ttf.h>
 #include <stdbool.h>
+#include "sound.h"
 
 #define MAX_BULLETS 100
 #define MAX_ENEMIES 20
@@ -21,6 +21,16 @@ typedef struct {
     int active;
 } Enemy;
 
+typedef struct {
+    SDL_Texture *map;
+    SDL_Texture *plane1;
+    SDL_Texture *plane2;
+    SDL_Texture *bullet;
+    SDL_Texture *enemy;
+    SDL_Texture *heart;
+    SDL_Texture *button;
+} GameTextures;
+
 typedef enum {
     STATE_MAIN_MENU,
     STATE_PLAYING,
@@ -36,6 +46,9 @@ typedef enum {
 
 SDL_Texture *loadTexture(SDL_Renderer *renderer, const char *path);
 
+void loadGameTextures(SDL_Renderer *renderer, GameTextures *tex);
+void destroyGameTextures(GameTextures *tex);
+
 void renderScrollingBackground(SDL_Renderer *renderer, SDL_Texture *mapTex, float mapY);
 
 void handleKeyDown(SDL_Event *event, GameState *state);
@@ -44,9 +57,7 @@ void resetLocalGame(SDL_Rect *plane, Bullet bullets[], Enemy enemies[], int *liv
 
 void runLocalMode(
     SDL_Renderer *renderer, TTF_Font *font,
-    SDL_Texture *planeTex, SDL_Texture *bulletTex,
-    SDL_Texture *enemyTex, SDL_Texture *heartTex,
-    Mix_Chunk *shootSound, Mix_Chunk *hitSound,
+    const GameTextures *tex, const GameSounds *sounds,
     SDL_Rect *plane, Bullet bullets[], Enemy enemies[],
     int *shootTimer, int shootDelay,
     int *lives, int *score, int *finalScore,
@@ -54,8 +65,7 @@ void runLocalMode(
 
 void runClientMode(
     SDL_Renderer *renderer, TTF_Font *font,
-    SDL_Texture *planeTex, SDL_Texture *planeTex2,
-    SDL_Texture *bulletTex, SDL_Texture *enemyTex, SDL_Texture *heartTex,
+    const GameTextures *tex,
     GameState *state, PlayMode *mode);
 
 #endif

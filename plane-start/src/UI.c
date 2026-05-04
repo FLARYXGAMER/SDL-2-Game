@@ -108,6 +108,24 @@ void renderGameOverMenu(SDL_Renderer *renderer, TTF_Font *font, Button *buttons,
         renderButton(renderer, &buttons[i], font);
 }
 
+void initMenuButtons(MenuButtons *menus, SDL_Texture *buttonTex)
+{
+    SDL_Color white = {255, 255, 255, 255};
+    int w = 200 * 1.5f;
+    int h = 60  * 1.5f;
+
+    menus->mainMenu[0] = initializeButton(w, h, buttonTex, white, "Start");
+    menus->mainMenu[1] = initializeButton(w, h, buttonTex, white, "Quit");
+    menus->mainMenu[2] = initializeButton(w, h, buttonTex, white, "Server");
+    menus->mainMenu[3] = initializeButton(w, h, buttonTex, white, "Client");
+
+    menus->pauseMenu[0] = initializeButton(w, h, buttonTex, white, "Resume");
+    menus->pauseMenu[1] = initializeButton(w, h, buttonTex, white, "Quit");
+
+    menus->gameOver[0] = initializeButton(w, h, buttonTex, white, "Play Again");
+    menus->gameOver[1] = initializeButton(w, h, buttonTex, white, "Quit");
+}
+
 void renderTextTopRight(SDL_Renderer *renderer, TTF_Font *font, const char *text, SDL_Color color)
 {
     SDL_Surface *surface = TTF_RenderText_Blended(font, text, color);

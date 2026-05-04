@@ -13,6 +13,18 @@ typedef struct {
     const char*   label;
 } Button;
 
+#define MAIN_MENU_COUNT  4
+#define PAUSE_MENU_COUNT 2
+#define GAME_OVER_COUNT  2
+
+typedef struct {
+    Button mainMenu[MAIN_MENU_COUNT];
+    Button pauseMenu[PAUSE_MENU_COUNT];
+    Button gameOver[GAME_OVER_COUNT];
+} MenuButtons;
+
+void initMenuButtons(MenuButtons *menus, SDL_Texture *buttonTex);
+
 Button    initializeButton(int w, int h, SDL_Texture* bg, SDL_Color text, const char* label);
 void      centerButtonBottom(Button* b, SDL_Rect parent, int padding);
 void      layoutButtons(Button* buttons, int count, SDL_Rect box, int startOffsetY, int spacing);

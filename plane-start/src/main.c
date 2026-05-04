@@ -1,6 +1,5 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
-#include <SDL2/SDL_mixer.h>
 #include <SDL2/SDL_ttf.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -13,7 +12,16 @@
 #include "sound.h"
 #include "UI.h"
 
-#define ARRAY_LEN(a) (sizeof(a) / sizeof(a[0]))
+static void initSDL(SDL_Window **window, SDL_Renderer **renderer, TTF_Font **font)
+{
+    SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
+    IMG_Init(IMG_INIT_PNG);
+    TTF_Init();
+    initAudio();
+    *window   = SDL_CreateWindow("Shooter", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, SCREEN_WIDTH, SCREEN_HEIGHT, 0);
+    *renderer = SDL_CreateRenderer(*window, -1, SDL_RENDERER_ACCELERATED);
+    *font     = TTF_OpenFont("resources/fonts/DejaVuSans.ttf", 24);
+}
 
 static void handleButtonEvents(Button *b, SDL_Event *event, GameState *state, PlayMode *mode, const char *serverHost)
 {
@@ -56,52 +64,19 @@ int main(int argc, char *argv[])
     srand(time(NULL));
     const char *serverHost = argc > 1 ? argv[1] : SERVER_IP;
 
-    SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
-    IMG_Init(IMG_INIT_PNG);
-    TTF_Init();
-    initAudio();
+    SDL_Window   *window;
+    SDL_Renderer *renderer;
+    TTF_Font     *font;
+    initSDL(&window, &renderer, &font);
 
-    SDL_Window   *window   = SDL_CreateWindow("Shooter", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, SCREEN_WIDTH, SCREEN_HEIGHT, 0);
-    SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
-    TTF_Font     *font     = TTF_OpenFont("resources/fonts/DejaVuSans.ttf", 24);
+    GameTextures tex;
+    loadGameTextures(renderer, &tex);
 
-    SDL_Texture *mapTex    = loadTexture(renderer, "resources/map.png");
-    SDL_Texture *planeTex  = loadTexture(renderer, "resources/plane1.png");
-    SDL_Texture *planeTex2 = loadTexture(renderer, "resources/plane2.png");
-    SDL_Texture *bulletTex = loadTexture(renderer, "resources/test-bullet.png");
-    SDL_Texture *enemyTex  = loadTexture(renderer, "resources/plane5.png");
-    SDL_Texture *heartTex  = loadTexture(renderer, "resources/heart.png");
-    SDL_Texture *buttonTex = loadTexture(renderer, "resources/buttonPictures/Button.png");
-    SDL_SetTextureBlendMode(buttonTex, SDL_BLENDMODE_BLEND);
+    GameSounds sounds;
+    loadGameSounds(&sounds);
 
-    Mix_Chunk *shootSound = loadSound("resources/sounds/bullet.wav");
-    Mix_Chunk *hitSound   = loadSound("resources/sounds/roblox.wav");
-
-    Mix_Music *bgMusic = Mix_LoadMUS("resources/sounds/music.wav");
-    if (!bgMusic)
-        printf("Failed to load music.wav: %s\n", Mix_GetError());
-    else {
-        Mix_VolumeMusic(40);
-        Mix_PlayMusic(bgMusic, -1);
-    }
-
-    SDL_Color white = {255, 255, 255, 255};
-    float scale = 1.5f;
-
-    Button mainMenuButtons[] = {
-        initializeButton(200 * scale, 60 * scale, buttonTex, white, "Start"),
-        initializeButton(200 * scale, 60 * scale, buttonTex, white, "Quit"),
-        initializeButton(200 * scale, 60 * scale, buttonTex, white, "Server"),
-        initializeButton(200 * scale, 60 * scale, buttonTex, white, "Client"),
-    };
-    Button pauseMenuButtons[] = {
-        initializeButton(200 * scale, 60 * scale, buttonTex, white, "Resume"),
-        initializeButton(200 * scale, 60 * scale, buttonTex, white, "Quit"),
-    };
-    Button gameOverButtons[] = {
-        initializeButton(200 * scale, 60 * scale, buttonTex, white, "Play Again"),
-        initializeButton(200 * scale, 60 * scale, buttonTex, white, "Quit"),
-    };
+    MenuButtons menus;
+    initMenuButtons(&menus, tex.button);
 
     GameState state = STATE_MAIN_MENU;
     PlayMode  mode  = MODE_LOCAL;
@@ -134,14 +109,14 @@ int main(int argc, char *argv[])
             Button *buttons = NULL;
             int     count   = 0;
             if (state == STATE_MAIN_MENU) {
-                buttons = mainMenuButtons;
-                count   = ARRAY_LEN(mainMenuButtons);
+                buttons = menus.mainMenu;
+                count   = MAIN_MENU_COUNT;
             } else if (state == STATE_PAUSE_MENU) {
-                buttons = pauseMenuButtons;
-                count   = ARRAY_LEN(pauseMenuButtons);
+                buttons = menus.pauseMenu;
+                count   = PAUSE_MENU_COUNT;
             } else if (state == STATE_GAME_OVER) {
-                buttons = gameOverButtons;
-                count   = ARRAY_LEN(gameOverButtons);
+                buttons = menus.gameOver;
+                count   = GAME_OVER_COUNT;
             }
 
             GameState prevState = state;
@@ -157,21 +132,20 @@ int main(int argc, char *argv[])
         mapY += mapSpeed;
         if (mapY >= SCREEN_HEIGHT)
             mapY = 0;
-        renderScrollingBackground(renderer, mapTex, mapY);
+        renderScrollingBackground(renderer, tex.map, mapY);
 
         if (state == STATE_MAIN_MENU) {
-            renderMenu(renderer, mainMenuButtons, ARRAY_LEN(mainMenuButtons), font, 400, 600);
+            renderMenu(renderer, menus.mainMenu, MAIN_MENU_COUNT, font, 400, 600);
         } else if (state == STATE_PLAYING) {
             if (mode == MODE_CLIENT)
-                runClientMode(renderer, font, planeTex, planeTex2, bulletTex, enemyTex, heartTex, &state, &mode);
+                runClientMode(renderer, font, &tex, &state, &mode);
             else
-                runLocalMode(renderer, font, planeTex, bulletTex, enemyTex, heartTex,
-                             shootSound, hitSound, &plane, bullets, enemies,
+                runLocalMode(renderer, font, &tex, &sounds, &plane, bullets, enemies,
                              &shootTimer, shootDelay, &lives, &score, &finalScore, &state);
         } else if (state == STATE_GAME_OVER) {
-            renderGameOverMenu(renderer, font, gameOverButtons, ARRAY_LEN(gameOverButtons), finalScore);
+            renderGameOverMenu(renderer, font, menus.gameOver, GAME_OVER_COUNT, finalScore);
         } else if (state == STATE_PAUSE_MENU) {
-            renderMenu(renderer, pauseMenuButtons, ARRAY_LEN(pauseMenuButtons), font, 400, 600);
+            renderMenu(renderer, menus.pauseMenu, PAUSE_MENU_COUNT, font, 400, 600);
         } else if (state == STATE_QUIT) {
             running = false;
         }
@@ -180,18 +154,8 @@ int main(int argc, char *argv[])
         SDL_Delay(16);
     }
 
-    SDL_DestroyTexture(mapTex);
-    SDL_DestroyTexture(planeTex);
-    SDL_DestroyTexture(planeTex2);
-    SDL_DestroyTexture(bulletTex);
-    SDL_DestroyTexture(enemyTex);
-    SDL_DestroyTexture(heartTex);
-    SDL_DestroyTexture(buttonTex);
-
-    Mix_FreeChunk(shootSound);
-    Mix_FreeChunk(hitSound);
-    Mix_FreeMusic(bgMusic);
-
+    destroyGameTextures(&tex);
+    freeGameSounds(&sounds);
     cleanupAudio();
 
     TTF_Quit();

@@ -2,7 +2,6 @@
 #include "UI.h"
 #include "constants.h"
 #include "network.h"
-#include "sound.h"
 #include <SDL2/SDL_image.h>
 #include <math.h>
 #include <stdio.h>
@@ -19,6 +18,29 @@ SDL_Texture *loadTexture(SDL_Renderer *renderer, const char *path)
     SDL_Texture *tex = SDL_CreateTextureFromSurface(renderer, surf);
     SDL_FreeSurface(surf);
     return tex;
+}
+
+void loadGameTextures(SDL_Renderer *renderer, GameTextures *tex)
+{
+    tex->map    = loadTexture(renderer, "resources/map.png");
+    tex->plane1 = loadTexture(renderer, "resources/plane1.png");
+    tex->plane2 = loadTexture(renderer, "resources/plane2.png");
+    tex->bullet = loadTexture(renderer, "resources/test-bullet.png");
+    tex->enemy  = loadTexture(renderer, "resources/plane5.png");
+    tex->heart  = loadTexture(renderer, "resources/heart.png");
+    tex->button = loadTexture(renderer, "resources/buttonPictures/Button.png");
+    SDL_SetTextureBlendMode(tex->button, SDL_BLENDMODE_BLEND);
+}
+
+void destroyGameTextures(GameTextures *tex)
+{
+    SDL_DestroyTexture(tex->map);
+    SDL_DestroyTexture(tex->plane1);
+    SDL_DestroyTexture(tex->plane2);
+    SDL_DestroyTexture(tex->bullet);
+    SDL_DestroyTexture(tex->enemy);
+    SDL_DestroyTexture(tex->heart);
+    SDL_DestroyTexture(tex->button);
 }
 
 void renderScrollingBackground(SDL_Renderer *renderer, SDL_Texture *mapTex, float mapY)
@@ -54,9 +76,7 @@ void resetLocalGame(SDL_Rect *plane, Bullet bullets[], Enemy enemies[], int *liv
 
 void runLocalMode(
     SDL_Renderer *renderer, TTF_Font *font,
-    SDL_Texture *planeTex, SDL_Texture *bulletTex,
-    SDL_Texture *enemyTex, SDL_Texture *heartTex,
-    Mix_Chunk *shootSound, Mix_Chunk *hitSound,
+    const GameTextures *tex, const GameSounds *sounds,
     SDL_Rect *plane, Bullet bullets[], Enemy enemies[],
     int *shootTimer, int shootDelay,
     int *lives, int *score, int *finalScore,
@@ -77,7 +97,7 @@ void runLocalMode(
     (*shootTimer)++;
     if (*shootTimer >= shootDelay) {
         *shootTimer = 0;
-        playSound(shootSound);
+        playSound(sounds->shoot);
 
         int gunX[2] = {plane->x + plane->w / 4 - 8, plane->x + 3 * plane->w / 4 - 8};
         for (int g = 0; g < 2; g++) {
@@ -137,7 +157,7 @@ void runLocalMode(
         SDL_Rect en = {(int)enemies[i].x, (int)enemies[i].y, 64, 64};
         if (SDL_HasIntersection(plane, &en)) {
             enemies[i].active = 0;
-            playSound(hitSound);
+            playSound(sounds->hit);
             (*lives)--;
             if (*lives <= 0) {
                 *finalScore = *score;
@@ -146,7 +166,7 @@ void runLocalMode(
         }
     }
 
-    SDL_RenderCopy(renderer, planeTex, NULL, plane);
+    SDL_RenderCopy(renderer, tex->plane1, NULL, plane);
 
     SDL_Rect r = {0, 0, 16, 16};
     for (int i = 0; i < MAX_BULLETS; i++) {
@@ -154,7 +174,7 @@ void runLocalMode(
             continue;
         r.x = bullets[i].x;
         r.y = bullets[i].y;
-        SDL_RenderCopyEx(renderer, bulletTex, NULL, &r, -90, NULL, SDL_FLIP_NONE);
+        SDL_RenderCopyEx(renderer, tex->bullet, NULL, &r, -90, NULL, SDL_FLIP_NONE);
     }
 
     SDL_Rect er = {0, 0, 64, 64};
@@ -163,13 +183,13 @@ void runLocalMode(
             continue;
         er.x = enemies[i].x;
         er.y = enemies[i].y;
-        SDL_RenderCopyEx(renderer, enemyTex, NULL, &er, 0, NULL, SDL_FLIP_VERTICAL);
+        SDL_RenderCopyEx(renderer, tex->enemy, NULL, &er, 0, NULL, SDL_FLIP_VERTICAL);
     }
 
     SDL_Rect hr = {10, 10, 32, 32};
     for (int i = 0; i < *lives; i++) {
         hr.x = 10 + i * 40;
-        SDL_RenderCopy(renderer, heartTex, NULL, &hr);
+        SDL_RenderCopy(renderer, tex->heart, NULL, &hr);
     }
 
     char scoreText[64];
@@ -179,8 +199,7 @@ void runLocalMode(
 
 void runClientMode(
     SDL_Renderer *renderer, TTF_Font *font,
-    SDL_Texture *planeTex, SDL_Texture *planeTex2,
-    SDL_Texture *bulletTex, SDL_Texture *enemyTex, SDL_Texture *heartTex,
+    const GameTextures *tex,
     GameState *state, PlayMode *mode)
 {
     const Uint8 *keys = SDL_GetKeyboardState(NULL);
@@ -204,7 +223,7 @@ void runClientMode(
         return;
     }
 
-    SDL_Texture *playerTextures[NET_MAX_PLAYERS] = {planeTex, planeTex2};
+    SDL_Texture *playerTextures[NET_MAX_PLAYERS] = {tex->plane1, tex->plane2};
     for (int i = 0; i < NET_MAX_PLAYERS; i++) {
         if (!netState.players[i].active)
             continue;
@@ -218,7 +237,7 @@ void runClientMode(
             continue;
         r.x = (int)netState.bullets[i].x;
         r.y = (int)netState.bullets[i].y;
-        SDL_RenderCopyEx(renderer, bulletTex, NULL, &r, -90, NULL, SDL_FLIP_NONE);
+        SDL_RenderCopyEx(renderer, tex->bullet, NULL, &r, -90, NULL, SDL_FLIP_NONE);
     }
 
     SDL_Rect er = {0, 0, 64, 64};
@@ -227,13 +246,13 @@ void runClientMode(
             continue;
         er.x = (int)netState.enemies[i].x;
         er.y = (int)netState.enemies[i].y;
-        SDL_RenderCopyEx(renderer, enemyTex, NULL, &er, 0, NULL, SDL_FLIP_VERTICAL);
+        SDL_RenderCopyEx(renderer, tex->enemy, NULL, &er, 0, NULL, SDL_FLIP_VERTICAL);
     }
 
     SDL_Rect hr = {10, 10, 32, 32};
     for (int i = 0; i < netState.lives; i++) {
         hr.x = 10 + i * 40;
-        SDL_RenderCopy(renderer, heartTex, NULL, &hr);
+        SDL_RenderCopy(renderer, tex->heart, NULL, &hr);
     }
 
     char status[96];

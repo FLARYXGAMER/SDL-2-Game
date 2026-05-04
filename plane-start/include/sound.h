@@ -3,9 +3,18 @@
 
 #include <SDL2/SDL_mixer.h>
 
-int initAudio();
-Mix_Chunk* loadSound(const char* path);
-void playSound(Mix_Chunk* sound);
-void cleanupAudio();
+typedef struct {
+    Mix_Chunk *shoot;
+    Mix_Chunk *hit;
+    Mix_Music *bgMusic;
+} GameSounds;
+
+int        initAudio(void);
+Mix_Chunk *loadSound(const char *path);
+void       playSound(Mix_Chunk *sound);
+void       cleanupAudio(void);
+
+void loadGameSounds(GameSounds *sounds);
+void freeGameSounds(GameSounds *sounds);
 
 #endif
