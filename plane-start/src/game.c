@@ -84,10 +84,10 @@ void runLocalMode(
 {
     const Uint8 *keys = SDL_GetKeyboardState(NULL);
 
-    if (keys[SDL_SCANCODE_LEFT])  plane->x -= 5;
-    if (keys[SDL_SCANCODE_RIGHT]) plane->x += 5;
-    if (keys[SDL_SCANCODE_UP])    plane->y -= 5;
-    if (keys[SDL_SCANCODE_DOWN])  plane->y += 5;
+    if (keys[SDL_SCANCODE_LEFT])  plane->x -= 10;
+    if (keys[SDL_SCANCODE_RIGHT]) plane->x += 10;
+    if (keys[SDL_SCANCODE_UP])    plane->y -= 10;
+    if (keys[SDL_SCANCODE_DOWN])  plane->y += 10;
 
     if (plane->x < 0)                        plane->x = 0;
     if (plane->y < 0)                        plane->y = 0;
