@@ -1,0 +1,161 @@
+flowchart TD
+
+%% ─────────────────────────────────────────────────────────────────────────────
+%% ① STARTUP
+%% ─────────────────────────────────────────────────────────────────────────────
+subgraph INIT["① Startup  (main.c)"]
+    direction TB
+    I1["SDL_Init · IMG_Init · TTF_Init\nSDL_INIT_VIDEO | SDL_INIT_AUDIO"]
+    I2["Load textures\nmap · plane1/2 · plane5 · bullet · heart · Button"]
+    I3["Load sounds\nbullet.wav · roblox.wav · music.wav\nMix_PlayMusic  background loop  vol=40"]
+    I4["Create 6 Buttons\nStart · Quit · Server · Client · Resume · Quit2\nstate=MAIN_MENU  mode=MODE_LOCAL"]
+    I1 --> I2 --> I3 --> I4
+end
+
+%% ─────────────────────────────────────────────────────────────────────────────
+%% ② MAIN GAME LOOP
+%% ─────────────────────────────────────────────────────────────────────────────
+subgraph LOOP["② Main Game Loop  (60 Hz  ·  SDL_Delay 16 ms per frame)"]
+    direction TB
+
+    EV["SDL_PollEvent\nSDL_QUIT → exit\nSDL_KEYDOWN → handleKeyDown\n  ESC: PLAYING ↔ PAUSE_MENU"]
+    BG["Scroll background\nmapY += 1.2  wrap at SCREEN_HEIGHT"]
+    DS{"GameState?"}
+
+    EV --> BG --> DS
+
+    DS -- "MAIN_MENU" --> MM["renderMenu  4 buttons\nStart · Quit · Server · Client\nhandleButtonEvents  label-compare"]
+    DS -- "PAUSE_MENU" --> PM["renderMenu  2 buttons\nResume · Quit\nhandleButtonEvents  label-compare"]
+    DS -- "GAME_OVER" --> GOM["renderGameOverMenu\nfinalScore panel\nPlay Again  ·  Quit"]
+    DS -- "QUIT" --> QX(["SDL_Destroy* · Mix/TTF/IMG_Quit\nSDL_Quit · return 0"])
+    DS -- "PLAYING" --> PLD{"PlayMode?"}
+
+    MM -- "click Start" --> SL["state=PLAYING\nmode=MODE_LOCAL"]
+    MM -- "click Quit" --> SQ["state=STATE_QUIT"]
+    MM -- "click Server" --> SST["startServerThread\nSDL_CreateThread serverThread\nSDL_DetachThread"]
+    MM -- "click Client" --> SCC["networkClientConnect host\nSDL_CreateThread clientThread\nSDL_DetachThread"]
+    SCC -- "connect OK → 0" --> SC2["state=PLAYING\nmode=MODE_CLIENT"]
+    GOM -- "click Play Again" --> RST["resetLocalGame\nplane · bullets · enemies\nlives=4  score=0  shootTimer=0\nstate=PLAYING  mode=LOCAL"]
+    GOM -- "click Quit" --> SQ
+
+    PLD -- "MODE_LOCAL" --> LM
+    PLD -- "MODE_CLIENT" --> CM
+
+    %% ── Local game logic ─────────────────────────────────────────────────────
+    subgraph LOCAL["MODE_LOCAL  —  single-player game logic"]
+        direction TB
+        LM["Read arrow keys\nplane.x/y ±5  clamp 0…SCREEN_WIDTH/HEIGHT"]
+        LS["shootTimer++\nevery 10 frames:\n  spawn 2 bullets  leftGun + rightGun\n  playSound  bullet.wav"]
+        LB["Move bullets\ny −= 8 per frame\ndeactivate if y < 0"]
+        LE["Each enemy slot:\n  rand%1000 < 5 → spawn at random x  y=−64\n  y += 2  ·  x = baseX + 50·sin offset\n  deactivate if y > SCREEN_HEIGHT"]
+        LC1["Bullet × Enemy  SDL_HasIntersection\n→ deactivate both  ·  score += 10"]
+        LC2["Player × Enemy  SDL_HasIntersection\n→ deactivate enemy  ·  lives--\n   playSound  roblox.wav"]
+        LV{"lives ≤ 0?"}
+        LR["Render\nplaneTex  bulletTex  enemyTex\nheartTex × lives  ·  scoreText"]
+        LG["finalScore = score\nstate = STATE_GAME_OVER"]
+        LM --> LS --> LB --> LE --> LC1 --> LC2 --> LV
+        LV -- "no" --> LR
+        LV -- "yes" --> LG
+    end
+
+    %% ── Client mode ──────────────────────────────────────────────────────────
+    subgraph CLIENT["MODE_CLIENT  —  network render only"]
+        direction TB
+        CM["networkClientSetInput\narrow keys → clientMutex"]
+        CG["networkClientGetState\nclientMutex → netState"]
+        CC{"clientRunning?"}
+        CGO{"netState.gameOver?"}
+        CR["Render NetGameState\nplayerTextures[0/1]  bulletTex  enemyTex\nheartTex × lives\nP#  Players:N  Score:N"]
+        CD["networkClientDisconnect\nstate=MAIN_MENU · mode=LOCAL"]
+        CD2["state=MAIN_MENU · mode=LOCAL"]
+        CM --> CG --> CC
+        CC -- "no" --> CD2
+        CC -- "yes" --> CGO
+        CGO -- "yes" --> CD
+        CGO -- "no" --> CR
+    end
+
+    %% ── Present ──────────────────────────────────────────────────────────────
+    LR --> PRS["SDL_RenderPresent\nSDL_Delay 16 ms"]
+    LG --> PRS
+    CR --> PRS
+    CD --> PRS
+    CD2 --> PRS
+    MM --> PRS
+    PM --> PRS
+    GOM --> PRS
+    PRS --> EV
+end
+
+%% ─────────────────────────────────────────────────────────────────────────────
+%% ③ SERVER THREAD
+%% ─────────────────────────────────────────────────────────────────────────────
+subgraph SRV["③ Server Thread  (network.c · testServerFun · ~125 Hz)"]
+    direction TB
+    SV1["SDLNet_ResolveHost NULL :8080\nSDLNet_TCP_Open → listen socket\nSDLNet_AllocSocketSet max=2\nlives=4  player positions set"]
+    SV2{"SDLNet_TCP_Accept\nnew client?"}
+    SV3["assign slot 0 or 1\nSDLNet_TCP_AddSocket\nsend NetWelcomePacket\n  {magic=0x504C4E45 · playerId}"]
+    SV4["SDLNet_CheckSockets timeout=0\nfor each connected client:\n  SDLNet_SocketReady?\n  recvAll NetInputPacket\n  verify magic  →  store input\n  on error: close + disconnect"]
+    SV5["updateServerGame\n  move each player ±5 from input · clamp\n  shootTimer++ → every 10 ticks: addBullet ×2 per active player\n  bullets y −= 8 · deactivate if y < 0\n  enemies: 5/1000 spawn · y += 2 · sinf sinusoidal x\n  bullet×enemy intersects: deactivate + score += 10\n  player×enemy intersects: deactivate enemy · lives-- · gameOver"]
+    SV6["broadcast NetGameState\nfor each connected client:\n  state.playerId = i\n  sendAll → on error: disconnect"]
+    SV7{"gameOver?"}
+    SV8["SDL_Delay 8 ms"]
+    SV9["close all client sockets\nSDLNet_FreeSocketSet\nSDLNet_TCP_Close serverSocket\nthread exits"]
+    SV1 --> SV2
+    SV2 -- "yes  slot free" --> SV3 --> SV4
+    SV2 -- "no" --> SV4
+    SV4 --> SV5 --> SV6 --> SV7
+    SV7 -- "no" --> SV8 --> SV2
+    SV7 -- "yes" --> SV9
+end
+
+%% ─────────────────────────────────────────────────────────────────────────────
+%% ④ CLIENT THREAD
+%% ─────────────────────────────────────────────────────────────────────────────
+subgraph CTH["④ Client Thread  (network.c · clientThread)"]
+    direction TB
+    CT1["SDLNet_ResolveHost host :8080\nSDLNet_TCP_Open → connect"]
+    CT2["recvAll NetWelcomePacket\nverify magic 0x504C4E45\nclientPlayerId = welcome.playerId\nclientConnected = 1"]
+    CT3["Lock clientMutex\nread clientInput copy\nUnlock"]
+    CT4["sendAll NetInputPacket\n{magic · left · right · up · down}"]
+    CT5["recvAll NetGameState\n{playerId · connectedPlayers · lives · score\ngameOver · players[] · bullets[] · enemies[]}"]
+    CT6["Lock clientMutex\nclientState = stateCopy\nclientPlayerId = stateCopy.playerId\nUnlock"]
+    CT7{"clientRunning?"}
+    CT8["SDLNet_TCP_Close\nclientConnected = 0\nclientRunning = 0\nthread exits"]
+    CT1 --> CT2 --> CT3 --> CT4 --> CT5 --> CT6 --> CT7
+    CT7 -- "yes" --> CT3
+    CT7 -- "no" --> CT8
+end
+
+%% ─────────────────────────────────────────────────────────────────────────────
+%% ⑤ SHARED MUTEX
+%% ─────────────────────────────────────────────────────────────────────────────
+MX[("clientMutex  SDL_mutex\n─────────────────────\nclientInput    NetInputPacket\nclientState    NetGameState\nclientPlayerId int\nclientConnected int\nclientRunning   int")]
+
+%% ─────────────────────────────────────────────────────────────────────────────
+%% ⑥ SUPPORTING MODULES
+%% ─────────────────────────────────────────────────────────────────────────────
+subgraph MODS["⑥ Supporting Modules"]
+    direction LR
+    UM["UI.c  /  UI.h\nButton { rect · bgTexture · textColor · isHovered · label }\ninitializeButton · layoutButtons\nrenderButton · renderMenu"]
+    SND["sound.c  /  sound.h\nSDL_mixer thin wrapper\ninitAudio → Mix_OpenAudio 44100 Hz\nloadSound  → Mix_LoadWAV\nplaySound  → Mix_PlayChannel -1"]
+end
+
+%% ─────────────────────────────────────────────────────────────────────────────
+%% CROSS-SUBGRAPH EDGES
+%% ─────────────────────────────────────────────────────────────────────────────
+I4 --> EV
+
+SST --> SV1
+SCC --> CT1
+
+CM -- "write input" --> MX
+CG -- "read state" --> MX
+CT3 -- "read input" --> MX
+CT6 -- "write state" --> MX
+
+MM -- "uses" --> UM
+PM -- "uses" --> UM
+
+LS -- "playSound  bullet.wav" --> SND
+LC2 -- "playSound  roblox.wav" --> SND

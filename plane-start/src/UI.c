@@ -1,5 +1,7 @@
 #include "../include/UI.h"
+#include "constants.h"
 #include <SDL2/SDL_ttf.h>
+#include <stdio.h>
 #include <stdlib.h>
 
 Button initializeButton(int w, int h, SDL_Texture* bg, SDL_Color text, const char* label)
@@ -65,6 +67,57 @@ void renderMenu(SDL_Renderer* renderer, Button buttons[], int count, TTF_Font* f
     layoutButtons(buttons, count, box, 80, 20);
     for (int i = 0; i < count; i++)
         renderButton(renderer, &buttons[i], font);
+}
+
+void drawCenterText(SDL_Renderer *renderer, TTF_Font *font, const char *text, int y, SDL_Color color)
+{
+    SDL_Surface *surface = TTF_RenderText_Blended(font, text, color);
+    SDL_Texture *texture = SDL_CreateTextureFromSurface(renderer, surface);
+
+    int w, h;
+    SDL_QueryTexture(texture, NULL, NULL, &w, &h);
+
+    SDL_Rect rect = {SCREEN_WIDTH / 2 - w / 2, y, w, h};
+    SDL_RenderCopy(renderer, texture, NULL, &rect);
+
+    SDL_FreeSurface(surface);
+    SDL_DestroyTexture(texture);
+}
+
+void renderGameOverMenu(SDL_Renderer *renderer, TTF_Font *font, Button *buttons, int count, int finalScore)
+{
+    SDL_Color cyan = {0, 230, 255, 255};
+    SDL_Color red  = {255, 70, 70, 255};
+
+    SDL_Rect panel = {SCREEN_WIDTH / 2 - 360, 110, 720, 590};
+
+    SDL_SetRenderDrawColor(renderer, 20, 25, 60, 255);
+    SDL_RenderFillRect(renderer, &panel);
+
+    SDL_SetRenderDrawColor(renderer, 0, 220, 255, 255);
+    SDL_RenderDrawRect(renderer, &panel);
+
+    drawCenterText(renderer, font, "GAME OVER", 170, red);
+
+    char scoreText[128];
+    sprintf(scoreText, "YOUR SCORE: %d", finalScore);
+    drawCenterText(renderer, font, scoreText, 250, cyan);
+
+    layoutButtons(buttons, count, panel, 270, 40);
+    for (int i = 0; i < count; i++)
+        renderButton(renderer, &buttons[i], font);
+}
+
+void renderTextTopRight(SDL_Renderer *renderer, TTF_Font *font, const char *text, SDL_Color color)
+{
+    SDL_Surface *surface = TTF_RenderText_Blended(font, text, color);
+    SDL_Texture *texture = SDL_CreateTextureFromSurface(renderer, surface);
+    int w, h;
+    SDL_QueryTexture(texture, NULL, NULL, &w, &h);
+    SDL_Rect rect = {SCREEN_WIDTH - w - 20, 10, w, h};
+    SDL_RenderCopy(renderer, texture, NULL, &rect);
+    SDL_FreeSurface(surface);
+    SDL_DestroyTexture(texture);
 }
 
 void renderButton(SDL_Renderer* renderer, Button* b, TTF_Font* font)
