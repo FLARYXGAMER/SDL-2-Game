@@ -6,8 +6,10 @@
 #include <stdbool.h>
 #include "sound.h"
 
-#define MAX_BULLETS 100
-#define MAX_ENEMIES 20
+#define MAX_BULLETS       100
+#define MAX_ENEMIES        20
+#define MAX_ENEMY_BULLETS  60
+#define MAX_POWERUPS        8
 
 typedef struct {
     float x, y;
@@ -16,9 +18,38 @@ typedef struct {
 
 typedef struct {
     float x, y;
+    bool active;
+} EnemyBullet;
+
+typedef enum {
+    PU_RAPIDFIRE,
+    PU_SHIELD,
+    PU_TRIPLE,
+    PU_BOMB,
+    PU_TYPE_COUNT
+} PowerUpType;
+
+typedef struct {
+    float x, y;
+    int active;
+    PowerUpType type;
+} PowerUp;
+
+typedef struct {
+    int shield;     // frames remaining
+    int rapid;      // frames remaining
+    int triple;     // frames remaining
+    int bombFlash;  // frames remaining
+} PlayerEffects;
+
+typedef struct {
+    float x, y;
     float baseX;
     float offset;
     int active;
+    int health;
+    int type;        // 0=normal, 1=tough
+    int shootTimer;
 } Enemy;
 
 typedef struct {
@@ -53,12 +84,15 @@ void renderScrollingBackground(SDL_Renderer *renderer, SDL_Texture *mapTex, floa
 
 void handleKeyDown(SDL_Event *event, GameState *state);
 
-void resetLocalGame(SDL_Rect *plane, Bullet bullets[], Enemy enemies[], int *lives, int *score, int *shootTimer);
+void resetLocalGame(SDL_Rect *plane, Bullet bullets[], Enemy enemies[],
+                    EnemyBullet enemyBullets[], PowerUp powerUps[],
+                    PlayerEffects *effects, int *lives, int *score, int *shootTimer);
 
 void runLocalMode(
     SDL_Renderer *renderer, TTF_Font *font,
     const GameTextures *tex, const GameSounds *sounds,
     SDL_Rect *plane, Bullet bullets[], Enemy enemies[],
+    EnemyBullet enemyBullets[], PowerUp powerUps[], PlayerEffects *effects,
     int *shootTimer, int shootDelay,
     int *lives, int *score, int *finalScore,
     GameState *state);

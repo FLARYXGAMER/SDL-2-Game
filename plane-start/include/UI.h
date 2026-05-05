@@ -28,7 +28,7 @@ void initMenuButtons(MenuButtons *menus, SDL_Texture *buttonTex);
 Button    initializeButton(int w, int h, SDL_Texture* bg, SDL_Color text, const char* label);
 void      centerButtonBottom(Button* b, SDL_Rect parent, int padding);
 void      layoutButtons(Button* buttons, int count, SDL_Rect box, int startOffsetY, int spacing);
-void      renderMenu(SDL_Renderer* renderer, Button* buttons, int count, TTF_Font* font, int sizeW, int sizeH);
+void      renderMenu(SDL_Renderer* renderer, Button* buttons, int count, TTF_Font* font, int sizeW, int sizeH, const char* title);
 void      renderButton(SDL_Renderer* renderer, Button* b, TTF_Font* font);
 void      drawCenterText(SDL_Renderer* renderer, TTF_Font* font, const char* text, int y, SDL_Color color);
 void      renderGameOverMenu(SDL_Renderer* renderer, TTF_Font* font, Button* buttons, int count, int finalScore);

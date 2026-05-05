@@ -14,7 +14,8 @@ endif
 CFLAGS = -Iinclude -I$(SDL_PATH)/include
 
 # Source files
-SRC = $(wildcard src/*.c)
+SRC     = $(wildcard src/*.c)
+SRC_LIB = src/game.c src/UI.c src/sound.c src/network.c src/server.c
 
 # Build rule
 all:
@@ -24,10 +25,21 @@ all:
 run: all
 	./$(TARGET)
 
+# Test rules
+test_network: tests/test_network.c src/network.c src/server.c
+	$(CC) tests/test_network.c src/network.c src/server.c $(CFLAGS) -o test_network $(LDFLAGS)
+
+test_game: tests/test_game.c $(SRC_LIB)
+	$(CC) tests/test_game.c $(SRC_LIB) $(CFLAGS) -o test_game $(LDFLAGS)
+
+test: test_network test_game
+	./test_network
+	./test_game
+
 # Clean rule
 clean:
 ifeq ($(OS),Windows_NT)
 	del /Q $(TARGET)
 else
-	rm -f $(TARGET)
+	rm -f $(TARGET) test_network test_game
 endif

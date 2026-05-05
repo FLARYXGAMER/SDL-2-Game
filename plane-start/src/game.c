@@ -63,12 +63,76 @@ void handleKeyDown(SDL_Event *event, GameState *state)
     }
 }
 
-void resetLocalGame(SDL_Rect *plane, Bullet bullets[], Enemy enemies[], int *lives, int *score, int *shootTimer)
+// ---------- power-up data tables ----------
+
+static const Uint8 PU_COL[PU_TYPE_COUNT][3] = {
+    {255, 140,   0},  // RAPIDFIRE  orange
+    { 50, 160, 255},  // SHIELD     blue
+    { 50, 220,  80},  // TRIPLE     green
+    {220,  50,  50},  // BOMB       red
+};
+static const char *PU_LABEL[PU_TYPE_COUNT] = {"R", "S", "T", "B"};
+static const int   PU_DURATION[PU_TYPE_COUNT] = {360, 300, 420, 0};
+
+// ---------- helpers ----------
+
+static void drawLabelCentered(SDL_Renderer *r, TTF_Font *font, const char *text,
+                               SDL_Color col, int bx, int by, int bw, int bh)
+{
+    SDL_Surface *surf = TTF_RenderText_Blended(font, text, col);
+    if (!surf) return;
+    SDL_Texture *tex = SDL_CreateTextureFromSurface(r, surf);
+    SDL_Rect dst = {bx + (bw - surf->w) / 2, by + (bh - surf->h) / 2, surf->w, surf->h};
+    SDL_FreeSurface(surf);
+    SDL_RenderCopy(r, tex, NULL, &dst);
+    SDL_DestroyTexture(tex);
+}
+
+static void dropPowerUp(PowerUp powerUps[], float x, float y)
+{
+    for (int k = 0; k < MAX_POWERUPS; k++) {
+        if (!powerUps[k].active) {
+            powerUps[k] = (PowerUp){x, y, 1, rand() % PU_TYPE_COUNT};
+            return;
+        }
+    }
+}
+
+static void applyPowerUp(PowerUpType type, PlayerEffects *effects,
+                          Enemy enemies[], EnemyBullet enemyBullets[], int *score)
+{
+    switch (type) {
+        case PU_RAPIDFIRE: effects->rapid  = PU_DURATION[PU_RAPIDFIRE]; break;
+        case PU_SHIELD:    effects->shield = PU_DURATION[PU_SHIELD];    break;
+        case PU_TRIPLE:    effects->triple = PU_DURATION[PU_TRIPLE];    break;
+        case PU_BOMB:
+            effects->bombFlash = 12;
+            for (int i = 0; i < MAX_ENEMIES; i++) {
+                if (enemies[i].active) {
+                    enemies[i].active = 0;
+                    *score += (enemies[i].type == 1) ? 30 : 10;
+                }
+            }
+            for (int i = 0; i < MAX_ENEMY_BULLETS; i++)
+                enemyBullets[i].active = 0;
+            break;
+        default: break;
+    }
+}
+
+// ---------- reset ----------
+
+void resetLocalGame(SDL_Rect *plane, Bullet bullets[], Enemy enemies[],
+                    EnemyBullet enemyBullets[], PowerUp powerUps[],
+                    PlayerEffects *effects, int *lives, int *score, int *shootTimer)
 {
     plane->x = SCREEN_WIDTH / 2 - 32;
     plane->y = SCREEN_HEIGHT - 80;
-    memset(bullets, 0, sizeof(Bullet) * MAX_BULLETS);
-    memset(enemies, 0, sizeof(Enemy) * MAX_ENEMIES);
+    memset(bullets,      0, sizeof(Bullet)       * MAX_BULLETS);
+    memset(enemies,      0, sizeof(Enemy)        * MAX_ENEMIES);
+    memset(enemyBullets, 0, sizeof(EnemyBullet)  * MAX_ENEMY_BULLETS);
+    memset(powerUps,     0, sizeof(PowerUp)      * MAX_POWERUPS);
+    memset(effects,      0, sizeof(PlayerEffects));
     *lives = PLAYER_LIVES;
     *score = 0;
     *shootTimer = 0;
@@ -78,118 +142,266 @@ void runLocalMode(
     SDL_Renderer *renderer, TTF_Font *font,
     const GameTextures *tex, const GameSounds *sounds,
     SDL_Rect *plane, Bullet bullets[], Enemy enemies[],
+    EnemyBullet enemyBullets[], PowerUp powerUps[], PlayerEffects *effects,
     int *shootTimer, int shootDelay,
     int *lives, int *score, int *finalScore,
     GameState *state)
 {
-    const Uint8 *keys = SDL_GetKeyboardState(NULL);
+    // --- tick active effects ---
+    if (effects->shield    > 0) effects->shield--;
+    if (effects->rapid     > 0) effects->rapid--;
+    if (effects->triple    > 0) effects->triple--;
+    if (effects->bombFlash > 0) effects->bombFlash--;
 
+    // --- player movement ---
+    const Uint8 *keys = SDL_GetKeyboardState(NULL);
     if (keys[SDL_SCANCODE_LEFT])  plane->x -= 10;
     if (keys[SDL_SCANCODE_RIGHT]) plane->x += 10;
     if (keys[SDL_SCANCODE_UP])    plane->y -= 10;
     if (keys[SDL_SCANCODE_DOWN])  plane->y += 10;
-
     if (plane->x < 0)                        plane->x = 0;
     if (plane->y < 0)                        plane->y = 0;
     if (plane->x > SCREEN_WIDTH  - plane->w) plane->x = SCREEN_WIDTH  - plane->w;
     if (plane->y > SCREEN_HEIGHT - plane->h) plane->y = SCREEN_HEIGHT - plane->h;
 
+    // --- shooting (rapid fire / triple shot) ---
+    int effectiveDelay = (effects->rapid > 0) ? 4 : shootDelay;
     (*shootTimer)++;
-    if (*shootTimer >= shootDelay) {
+    if (*shootTimer >= effectiveDelay) {
         *shootTimer = 0;
         playSound(sounds->shoot);
 
-        int gunX[2] = {plane->x + plane->w / 4 - 8, plane->x + 3 * plane->w / 4 - 8};
-        for (int g = 0; g < 2; g++) {
+        int gunCount = (effects->triple > 0) ? 3 : 2;
+        float gunX[3];
+        if (gunCount == 2) {
+            gunX[0] = plane->x + plane->w * 0.25f - 8;
+            gunX[1] = plane->x + plane->w * 0.75f - 8;
+        } else {
+            gunX[0] = plane->x + plane->w * 0.12f - 8;
+            gunX[1] = plane->x + plane->w * 0.50f - 8;
+            gunX[2] = plane->x + plane->w * 0.88f - 8;
+        }
+        for (int g = 0; g < gunCount; g++) {
             for (int i = 0; i < MAX_BULLETS; i++) {
                 if (!bullets[i].active) {
-                    bullets[i].x      = gunX[g];
-                    bullets[i].y      = plane->y;
-                    bullets[i].active = 1;
+                    bullets[i].x = gunX[g]; bullets[i].y = plane->y; bullets[i].active = 1;
                     break;
                 }
             }
         }
     }
 
+    // --- move player bullets ---
     for (int i = 0; i < MAX_BULLETS; i++) {
-        if (!bullets[i].active)
-            continue;
+        if (!bullets[i].active) continue;
         bullets[i].y -= 8;
-        if (bullets[i].y < 0)
-            bullets[i].active = 0;
+        if (bullets[i].y < 0) bullets[i].active = 0;
     }
 
+    // --- difficulty scaling ---
+    int spawnChance = 5 + *score / 100;
+    if (spawnChance > 25) spawnChance = 25;
+    float baseSpeed = 2.0f + *score / 250.0f;
+    if (baseSpeed > 5.0f) baseSpeed = 5.0f;
+
+    // --- update enemies ---
     for (int i = 0; i < MAX_ENEMIES; i++) {
-        if (!enemies[i].active && rand() % 1000 < 5) {
-            enemies[i].baseX  = rand() % (SCREEN_WIDTH - 64);
-            enemies[i].x      = enemies[i].baseX;
-            enemies[i].y      = -64;
-            enemies[i].offset = (float)(rand() % 360) / 50.0f;
-            enemies[i].active = 1;
+        if (!enemies[i].active && rand() % 1000 < spawnChance) {
+            int tough = (rand() % 5 == 0);
+            enemies[i] = (Enemy){
+                .baseX = rand() % (SCREEN_WIDTH - 64),
+                .y = -64,
+                .offset = (float)(rand() % 360) / 50.0f,
+                .active = 1, .type = tough,
+                .health = tough ? 3 : 1,
+                .shootTimer = 40 + rand() % 60
+            };
+            enemies[i].x = enemies[i].baseX;
         }
-        if (enemies[i].active) {
-            enemies[i].y += 2;
-            enemies[i].offset += 0.05f;
-            enemies[i].x = enemies[i].baseX + 50 * sin(enemies[i].offset);
-            if (enemies[i].y > SCREEN_HEIGHT)
-                enemies[i].active = 0;
+        if (!enemies[i].active) continue;
+
+        float spd = (enemies[i].type == 1) ? baseSpeed * 0.7f : baseSpeed;
+        enemies[i].y += spd;
+        enemies[i].offset += 0.05f;
+        enemies[i].x = enemies[i].baseX + 50 * sin(enemies[i].offset);
+        if (enemies[i].y > SCREEN_HEIGHT) { enemies[i].active = 0; continue; }
+
+        if (--enemies[i].shootTimer <= 0) {
+            enemies[i].shootTimer = 40 + rand() % 60;
+            for (int k = 0; k < MAX_ENEMY_BULLETS; k++) {
+                if (!enemyBullets[k].active) {
+                    enemyBullets[k] = (EnemyBullet){enemies[i].x + 24, enemies[i].y + 64, 1};
+                    break;
+                }
+            }
         }
     }
 
+    // --- move enemy bullets ---
+    for (int i = 0; i < MAX_ENEMY_BULLETS; i++) {
+        if (!enemyBullets[i].active) continue;
+        enemyBullets[i].y += 6;
+        if (enemyBullets[i].y > SCREEN_HEIGHT) enemyBullets[i].active = 0;
+    }
+
+    // --- move power-ups ---
+    for (int i = 0; i < MAX_POWERUPS; i++) {
+        if (!powerUps[i].active) continue;
+        powerUps[i].y += 1.5f;
+        if (powerUps[i].y > SCREEN_HEIGHT) { powerUps[i].active = 0; continue; }
+        SDL_Rect pr = {(int)powerUps[i].x, (int)powerUps[i].y, 32, 32};
+        if (SDL_HasIntersection(plane, &pr)) {
+            applyPowerUp(powerUps[i].type, effects, enemies, enemyBullets, score);
+            powerUps[i].active = 0;
+        }
+    }
+
+    // --- player bullets vs enemies ---
     for (int i = 0; i < MAX_BULLETS; i++) {
         for (int j = 0; j < MAX_ENEMIES; j++) {
-            if (!bullets[i].active || !enemies[j].active)
-                continue;
+            if (!bullets[i].active || !enemies[j].active) continue;
             SDL_Rect br = {(int)bullets[i].x, (int)bullets[i].y, 16, 16};
             SDL_Rect en = {(int)enemies[j].x,  (int)enemies[j].y, 64, 64};
-            if (SDL_HasIntersection(&br, &en)) {
-                bullets[i].active = 0;
+            if (!SDL_HasIntersection(&br, &en)) continue;
+            bullets[i].active = 0;
+            if (--enemies[j].health <= 0) {
+                int dropChance = (enemies[j].type == 1) ? 40 : 20;
+                if (rand() % 100 < dropChance)
+                    dropPowerUp(powerUps, enemies[j].x + 16, enemies[j].y + 16);
                 enemies[j].active = 0;
-                *score += 10;
+                *score += (enemies[j].type == 1) ? 30 : 10;
             }
         }
     }
 
+    // --- enemies ram player ---
     for (int i = 0; i < MAX_ENEMIES; i++) {
-        if (!enemies[i].active)
-            continue;
+        if (!enemies[i].active) continue;
         SDL_Rect en = {(int)enemies[i].x, (int)enemies[i].y, 64, 64};
-        if (SDL_HasIntersection(plane, &en)) {
-            enemies[i].active = 0;
-            playSound(sounds->hit);
-            (*lives)--;
-            if (*lives <= 0) {
-                *finalScore = *score;
-                *state = STATE_GAME_OVER;
-            }
-        }
+        if (!SDL_HasIntersection(plane, &en)) continue;
+        enemies[i].active = 0;
+        if (effects->shield > 0) continue;
+        playSound(sounds->hit);
+        if (--(*lives) <= 0) { *finalScore = *score; *state = STATE_GAME_OVER; }
+    }
+
+    // --- enemy bullets hit player ---
+    for (int i = 0; i < MAX_ENEMY_BULLETS; i++) {
+        if (!enemyBullets[i].active) continue;
+        SDL_Rect br = {(int)enemyBullets[i].x, (int)enemyBullets[i].y, 16, 16};
+        if (!SDL_HasIntersection(plane, &br)) continue;
+        enemyBullets[i].active = 0;
+        if (effects->shield > 0) continue;
+        playSound(sounds->hit);
+        if (--(*lives) <= 0) { *finalScore = *score; *state = STATE_GAME_OVER; }
+    }
+
+    // ===================== RENDER =====================
+
+    // shield glow around player
+    if (effects->shield > 0 && (effects->shield > 60 || (effects->shield / 8) % 2 == 0)) {
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(renderer, 50, 160, 255, 160);
+        SDL_Rect s1 = {plane->x - 5, plane->y - 5, plane->w + 10, plane->h + 10};
+        SDL_Rect s2 = {plane->x - 8, plane->y - 8, plane->w + 16, plane->h + 16};
+        SDL_RenderDrawRect(renderer, &s1);
+        SDL_SetRenderDrawColor(renderer, 50, 160, 255, 80);
+        SDL_RenderDrawRect(renderer, &s2);
     }
 
     SDL_RenderCopy(renderer, tex->plane1, NULL, plane);
 
+    // player bullets
     SDL_Rect r = {0, 0, 16, 16};
     for (int i = 0; i < MAX_BULLETS; i++) {
-        if (!bullets[i].active)
-            continue;
-        r.x = bullets[i].x;
-        r.y = bullets[i].y;
+        if (!bullets[i].active) continue;
+        r.x = (int)bullets[i].x; r.y = (int)bullets[i].y;
         SDL_RenderCopyEx(renderer, tex->bullet, NULL, &r, -90, NULL, SDL_FLIP_NONE);
     }
 
+    // enemy bullets (red)
+    SDL_SetTextureColorMod(tex->bullet, 255, 60, 60);
+    for (int i = 0; i < MAX_ENEMY_BULLETS; i++) {
+        if (!enemyBullets[i].active) continue;
+        r.x = (int)enemyBullets[i].x; r.y = (int)enemyBullets[i].y;
+        SDL_RenderCopyEx(renderer, tex->bullet, NULL, &r, 90, NULL, SDL_FLIP_NONE);
+    }
+    SDL_SetTextureColorMod(tex->bullet, 255, 255, 255);
+
+    // enemies
     SDL_Rect er = {0, 0, 64, 64};
     for (int i = 0; i < MAX_ENEMIES; i++) {
-        if (!enemies[i].active)
-            continue;
-        er.x = enemies[i].x;
-        er.y = enemies[i].y;
+        if (!enemies[i].active) continue;
+        er.x = (int)enemies[i].x; er.y = (int)enemies[i].y;
+        if (enemies[i].type == 1) SDL_SetTextureColorMod(tex->enemy, 255, 80, 80);
         SDL_RenderCopyEx(renderer, tex->enemy, NULL, &er, 0, NULL, SDL_FLIP_VERTICAL);
+        SDL_SetTextureColorMod(tex->enemy, 255, 255, 255);
     }
 
+    // power-ups (32x32 colored icon with letter)
+    for (int i = 0; i < MAX_POWERUPS; i++) {
+        if (!powerUps[i].active) continue;
+        int px = (int)powerUps[i].x, py = (int)powerUps[i].y;
+        PowerUpType t = powerUps[i].type;
+
+        // pulsing outline using ticks
+        float pulse = 0.6f + 0.4f * sinf((float)SDL_GetTicks() / 200.0f);
+        Uint8 alpha = (Uint8)(200 * pulse);
+
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(renderer, PU_COL[t][0], PU_COL[t][1], PU_COL[t][2], alpha);
+        SDL_Rect box = {px, py, 32, 32};
+        SDL_RenderFillRect(renderer, &box);
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 220);
+        SDL_RenderDrawRect(renderer, &box);
+
+        drawLabelCentered(renderer, font, PU_LABEL[t],
+                          (SDL_Color){255, 255, 255, 255}, px, py, 32, 32);
+    }
+
+    // bomb flash overlay
+    if (effects->bombFlash > 0) {
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+        Uint8 a = (Uint8)(effects->bombFlash * 18);
+        SDL_SetRenderDrawColor(renderer, 255, 220, 80, a);
+        SDL_Rect full = {0, 0, SCREEN_WIDTH, SCREEN_HEIGHT};
+        SDL_RenderFillRect(renderer, &full);
+    }
+
+    // hearts HUD
     SDL_Rect hr = {10, 10, 32, 32};
     for (int i = 0; i < *lives; i++) {
         hr.x = 10 + i * 40;
         SDL_RenderCopy(renderer, tex->heart, NULL, &hr);
+    }
+
+    // active power-up indicator bar (bottom-left)
+    typedef struct { int *timer; int maxTime; Uint8 r, g, b; const char *lbl; } Ind;
+    Ind inds[3] = {
+        {&effects->rapid,  360, 255, 140,   0, "R"},
+        {&effects->triple, 420,  50, 220,  80, "T"},
+        {&effects->shield, 300,  50, 160, 255, "S"},
+    };
+    int hudX = 10;
+    for (int i = 0; i < 3; i++) {
+        if (*inds[i].timer <= 0) continue;
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(renderer, inds[i].r, inds[i].g, inds[i].b, 190);
+        SDL_Rect icon = {hudX, SCREEN_HEIGHT - 52, 26, 26};
+        SDL_RenderFillRect(renderer, &icon);
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 200);
+        SDL_RenderDrawRect(renderer, &icon);
+        drawLabelCentered(renderer, font, inds[i].lbl,
+                          (SDL_Color){255, 255, 255, 255},
+                          hudX, SCREEN_HEIGHT - 52, 26, 26);
+        int barFill = (int)(26 * (*inds[i].timer) / (float)inds[i].maxTime);
+        SDL_SetRenderDrawColor(renderer, 40, 40, 40, 180);
+        SDL_Rect bg = {hudX, SCREEN_HEIGHT - 22, 26, 5};
+        SDL_RenderFillRect(renderer, &bg);
+        SDL_SetRenderDrawColor(renderer, inds[i].r, inds[i].g, inds[i].b, 255);
+        SDL_Rect fg = {hudX, SCREEN_HEIGHT - 22, barFill, 5};
+        SDL_RenderFillRect(renderer, &fg);
+        hudX += 34;
     }
 
     char scoreText[64];

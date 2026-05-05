@@ -46,11 +46,13 @@ static void handleButtonEvents(Button *b, SDL_Event *event, GameState *state, Pl
             }
         } else if (strcmp(b->label, "Server") == 0)
             startServerThread();
+
     } else if (*state == STATE_PAUSE_MENU) {
         if (strcmp(b->label, "Resume") == 0)
             *state = STATE_PLAYING;
         else if (strcmp(b->label, "Quit") == 0)
             *state = STATE_QUIT;
+
     } else if (*state == STATE_GAME_OVER) {
         if (strcmp(b->label, "Play Again") == 0)
             *state = STATE_PLAYING;
@@ -83,8 +85,11 @@ int main(int argc, char *argv[])
 
     SDL_Rect plane = {SCREEN_WIDTH / 2 - 32, SCREEN_HEIGHT - 80, 64, 64};
 
-    Bullet bullets[MAX_BULLETS] = {0};
-    Enemy  enemies[MAX_ENEMIES] = {0};
+    Bullet        bullets[MAX_BULLETS]            = {0};
+    Enemy         enemies[MAX_ENEMIES]            = {0};
+    EnemyBullet   enemyBullets[MAX_ENEMY_BULLETS] = {0};
+    PowerUp       powerUps[MAX_POWERUPS]          = {0};
+    PlayerEffects effects                         = {0};
 
     int shootTimer = 0;
     int shootDelay = 10;
@@ -123,29 +128,32 @@ int main(int argc, char *argv[])
             for (int i = 0; i < count; i++)
                 handleButtonEvents(&buttons[i], &e, &state, &mode, serverHost);
             if (prevState == STATE_GAME_OVER && state == STATE_PLAYING)
-                resetLocalGame(&plane, bullets, enemies, &lives, &score, &shootTimer);
+                resetLocalGame(&plane, bullets, enemies, enemyBullets, powerUps, &effects, &lives, &score, &shootTimer);
         }
 
         SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
         SDL_RenderClear(renderer);
 
         mapY += mapSpeed;
-        if (mapY >= SCREEN_HEIGHT)
-            mapY = 0;
+        if (mapY >= SCREEN_HEIGHT) mapY = 0;
         renderScrollingBackground(renderer, tex.map, mapY);
 
         if (state == STATE_MAIN_MENU) {
-            renderMenu(renderer, menus.mainMenu, MAIN_MENU_COUNT, font, 400, 600);
+            renderMenu(renderer, menus.mainMenu, MAIN_MENU_COUNT, font, 460, 420, "AIRSTRIKE");
         } else if (state == STATE_PLAYING) {
             if (mode == MODE_CLIENT)
                 runClientMode(renderer, font, &tex, &state, &mode);
             else
                 runLocalMode(renderer, font, &tex, &sounds, &plane, bullets, enemies,
+                             enemyBullets, powerUps, &effects,
                              &shootTimer, shootDelay, &lives, &score, &finalScore, &state);
+                mapSpeed = 1.2f + score / 500.0f;
+                if (mapSpeed > 3.0f) mapSpeed = 3.0f;
+
         } else if (state == STATE_GAME_OVER) {
             renderGameOverMenu(renderer, font, menus.gameOver, GAME_OVER_COUNT, finalScore);
         } else if (state == STATE_PAUSE_MENU) {
-            renderMenu(renderer, menus.pauseMenu, PAUSE_MENU_COUNT, font, 400, 600);
+            renderMenu(renderer, menus.pauseMenu, PAUSE_MENU_COUNT, font, 380, 280, "PAUSED");
         } else if (state == STATE_QUIT) {
             running = false;
         }

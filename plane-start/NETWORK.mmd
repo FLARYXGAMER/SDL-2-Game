@@ -1,0 +1,46 @@
+---
+title: Network Architecture
+---
+
+sequenceDiagram
+    participant M as Main Thread
+    participant C as Client Thread
+    participant S as Server Thread
+
+    note over M: User clicks "Server"
+    M->>S: startServerThread()
+    note over S: binds TCP port 8080<br/>waits for connections
+
+    note over M: User clicks "Client"
+    M->>C: networkClientConnect("ip")
+    note over C: clientRunning = 1
+
+    C->>S: TCP connect on port 8080
+    S->>C: NetWelcomePacket { magic, playerId }
+    note over C: clientConnected = 1<br/>clientPlayerId = N
+
+    loop every ~8ms (server tick)
+
+        note over M: SDL_GetKeyboardState()
+        M->>M: networkClientSetInput(l,r,u,d)
+        note over M: 🔒 mutex<br/>write clientInput<br/>🔓 mutex
+
+        note over C: 🔒 mutex<br/>copy clientInput<br/>🔓 mutex
+        C->>S: NetInputPacket { magic, left, right, up, down }
+
+        note over S: updateServerGame()<br/>─ move players<br/>─ fire bullets every 10 ticks<br/>─ move bullets & enemies<br/>─ bullet↔enemy collisions → score<br/>─ player↔enemy collisions → lives
+
+        S->>C: NetGameState { players[], bullets[], enemies[],<br/>lives, score, gameOver, playerId, connectedPlayers }
+
+        note over C: 🔒 mutex<br/>write clientState<br/>🔓 mutex
+
+        M->>M: networkClientGetState(&state)
+        note over M: 🔒 mutex<br/>copy clientState<br/>🔓 mutex
+
+        M->>M: render(state)
+    end
+
+    note over M: gameOver or disconnect
+    M->>C: networkClientDisconnect()
+    note over C: clientRunning = 0<br/>close socket
+    note over S: detects client gone<br/>removes from slot
