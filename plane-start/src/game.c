@@ -11,7 +11,8 @@
 SDL_Texture *loadTexture(SDL_Renderer *renderer, const char *path)
 {
     SDL_Surface *surf = IMG_Load(path);
-    if (!surf) {
+    if (!surf)
+    {
         printf("Failed to load %s: %s\n", path, IMG_GetError());
         return NULL;
     }
@@ -22,12 +23,12 @@ SDL_Texture *loadTexture(SDL_Renderer *renderer, const char *path)
 
 void loadGameTextures(SDL_Renderer *renderer, GameTextures *tex)
 {
-    tex->map    = loadTexture(renderer, "resources/map.png");
+    tex->map = loadTexture(renderer, "resources/map.png");
     tex->plane1 = loadTexture(renderer, "resources/plane1.png");
     tex->plane2 = loadTexture(renderer, "resources/plane2.png");
     tex->bullet = loadTexture(renderer, "resources/test-bullet.png");
-    tex->enemy  = loadTexture(renderer, "resources/plane5.png");
-    tex->heart  = loadTexture(renderer, "resources/heart.png");
+    tex->enemy = loadTexture(renderer, "resources/plane5.png");
+    tex->heart = loadTexture(renderer, "resources/heart.png");
     tex->button = loadTexture(renderer, "resources/buttonPictures/Button.png");
     SDL_SetTextureBlendMode(tex->button, SDL_BLENDMODE_BLEND);
 }
@@ -45,17 +46,47 @@ void destroyGameTextures(GameTextures *tex)
 
 void renderScrollingBackground(SDL_Renderer *renderer, SDL_Texture *mapTex, float mapY)
 {
-    SDL_Rect r1 = {0, (int)mapY,                 SCREEN_WIDTH, SCREEN_HEIGHT};
-    SDL_Rect r2 = {0, (int)mapY - SCREEN_HEIGHT, SCREEN_WIDTH, SCREEN_HEIGHT};
+    int texW, texH;
+    SDL_QueryTexture(mapTex, NULL, NULL, &texW, &texH);
+
+    /*
+        Vi vill INTE stretcha bilden.
+        Därför räknar vi ut en scale som bevarar bildens proportioner
+        och zoomar in tills bilden täcker hela spelytan.
+    */
+    float scaleX = (float)SCREEN_WIDTH / texW;
+    float scaleY = (float)SCREEN_HEIGHT / texH;
+
+    // Cover-effekt: välj största scale
+    float scale = scaleX > scaleY ? scaleX : scaleY;
+
+    int scaledW = (int)(texW * scale);
+    int scaledH = (int)(texH * scale);
+
+    // Centrera bilden i sidled
+    int x = (SCREEN_WIDTH - scaledW) / 2;
+
+    /*
+        Scrolla med bildens riktiga skalade höjd.
+        Detta gör att loopen sker rätt och inte efter SCREEN_HEIGHT.
+    */
+    int scrollY = (int)mapY % scaledH;
+
+    SDL_Rect r1 = {x, scrollY,           scaledW, scaledH};
+    SDL_Rect r2 = {x, scrollY - scaledH, scaledW, scaledH};
+    SDL_Rect r3 = {x, scrollY + scaledH, scaledW, scaledH};
+
     SDL_RenderCopy(renderer, mapTex, NULL, &r1);
     SDL_RenderCopy(renderer, mapTex, NULL, &r2);
+    SDL_RenderCopy(renderer, mapTex, NULL, &r3);
 }
 
 void handleKeyDown(SDL_Event *event, GameState *state)
 {
     if (event->key.repeat)
         return;
-    if (event->key.keysym.sym == SDLK_ESCAPE) {
+    if (event->key.keysym.sym == SDLK_ESCAPE)
+    {
         if (*state == STATE_PLAYING)
             *state = STATE_PAUSE_MENU;
         else if (*state == STATE_PAUSE_MENU)
@@ -66,21 +97,22 @@ void handleKeyDown(SDL_Event *event, GameState *state)
 // ---------- power-up data tables ----------
 
 static const Uint8 PU_COL[PU_TYPE_COUNT][3] = {
-    {255, 140,   0},  // RAPIDFIRE  orange
-    { 50, 160, 255},  // SHIELD     blue
-    { 50, 220,  80},  // TRIPLE     green
-    {220,  50,  50},  // BOMB       red
+    {255, 140, 0},  // RAPIDFIRE  orange
+    {50, 160, 255}, // SHIELD     blue
+    {50, 220, 80},  // TRIPLE     green
+    {220, 50, 50},  // BOMB       red
 };
 static const char *PU_LABEL[PU_TYPE_COUNT] = {"R", "S", "T", "B"};
-static const int   PU_DURATION[PU_TYPE_COUNT] = {360, 300, 420, 0};
+static const int PU_DURATION[PU_TYPE_COUNT] = {360, 300, 420, 0};
 
 // ---------- helpers ----------
 
 static void drawLabelCentered(SDL_Renderer *r, TTF_Font *font, const char *text,
-                               SDL_Color col, int bx, int by, int bw, int bh)
+                              SDL_Color col, int bx, int by, int bw, int bh)
 {
     SDL_Surface *surf = TTF_RenderText_Blended(font, text, col);
-    if (!surf) return;
+    if (!surf)
+        return;
     SDL_Texture *tex = SDL_CreateTextureFromSurface(r, surf);
     SDL_Rect dst = {bx + (bw - surf->w) / 2, by + (bh - surf->h) / 2, surf->w, surf->h};
     SDL_FreeSurface(surf);
@@ -90,8 +122,10 @@ static void drawLabelCentered(SDL_Renderer *r, TTF_Font *font, const char *text,
 
 static void dropPowerUp(PowerUp powerUps[], float x, float y)
 {
-    for (int k = 0; k < MAX_POWERUPS; k++) {
-        if (!powerUps[k].active) {
+    for (int k = 0; k < MAX_POWERUPS; k++)
+    {
+        if (!powerUps[k].active)
+        {
             powerUps[k] = (PowerUp){x, y, 1, rand() % PU_TYPE_COUNT};
             return;
         }
@@ -99,24 +133,34 @@ static void dropPowerUp(PowerUp powerUps[], float x, float y)
 }
 
 static void applyPowerUp(PowerUpType type, PlayerEffects *effects,
-                          Enemy enemies[], EnemyBullet enemyBullets[], int *score)
+                         Enemy enemies[], EnemyBullet enemyBullets[], int *score)
 {
-    switch (type) {
-        case PU_RAPIDFIRE: effects->rapid  = PU_DURATION[PU_RAPIDFIRE]; break;
-        case PU_SHIELD:    effects->shield = PU_DURATION[PU_SHIELD];    break;
-        case PU_TRIPLE:    effects->triple = PU_DURATION[PU_TRIPLE];    break;
-        case PU_BOMB:
-            effects->bombFlash = 12;
-            for (int i = 0; i < MAX_ENEMIES; i++) {
-                if (enemies[i].active) {
-                    enemies[i].active = 0;
-                    *score += (enemies[i].type == 1) ? 30 : 10;
-                }
+    switch (type)
+    {
+    case PU_RAPIDFIRE:
+        effects->rapid = PU_DURATION[PU_RAPIDFIRE];
+        break;
+    case PU_SHIELD:
+        effects->shield = PU_DURATION[PU_SHIELD];
+        break;
+    case PU_TRIPLE:
+        effects->triple = PU_DURATION[PU_TRIPLE];
+        break;
+    case PU_BOMB:
+        effects->bombFlash = 12;
+        for (int i = 0; i < MAX_ENEMIES; i++)
+        {
+            if (enemies[i].active)
+            {
+                enemies[i].active = 0;
+                *score += (enemies[i].type == 1) ? 30 : 10;
             }
-            for (int i = 0; i < MAX_ENEMY_BULLETS; i++)
-                enemyBullets[i].active = 0;
-            break;
-        default: break;
+        }
+        for (int i = 0; i < MAX_ENEMY_BULLETS; i++)
+            enemyBullets[i].active = 0;
+        break;
+    default:
+        break;
     }
 }
 
@@ -128,11 +172,11 @@ void resetLocalGame(SDL_Rect *plane, Bullet bullets[], Enemy enemies[],
 {
     plane->x = SCREEN_WIDTH / 2 - 32;
     plane->y = SCREEN_HEIGHT - 80;
-    memset(bullets,      0, sizeof(Bullet)       * MAX_BULLETS);
-    memset(enemies,      0, sizeof(Enemy)        * MAX_ENEMIES);
-    memset(enemyBullets, 0, sizeof(EnemyBullet)  * MAX_ENEMY_BULLETS);
-    memset(powerUps,     0, sizeof(PowerUp)      * MAX_POWERUPS);
-    memset(effects,      0, sizeof(PlayerEffects));
+    memset(bullets, 0, sizeof(Bullet) * MAX_BULLETS);
+    memset(enemies, 0, sizeof(Enemy) * MAX_ENEMIES);
+    memset(enemyBullets, 0, sizeof(EnemyBullet) * MAX_ENEMY_BULLETS);
+    memset(powerUps, 0, sizeof(PowerUp) * MAX_POWERUPS);
+    memset(effects, 0, sizeof(PlayerEffects));
     *lives = PLAYER_LIVES;
     *score = 0;
     *shootTimer = 0;
@@ -148,43 +192,68 @@ void runLocalMode(
     GameState *state)
 {
     // --- tick active effects ---
-    if (effects->shield    > 0) effects->shield--;
-    if (effects->rapid     > 0) effects->rapid--;
-    if (effects->triple    > 0) effects->triple--;
-    if (effects->bombFlash > 0) effects->bombFlash--;
+    if (effects->shield > 0)
+        effects->shield--;
+    if (effects->rapid > 0)
+        effects->rapid--;
+    if (effects->triple > 0)
+        effects->triple--;
+    if (effects->bombFlash > 0)
+        effects->bombFlash--;
 
     // --- player movement ---
     const Uint8 *keys = SDL_GetKeyboardState(NULL);
-    if (keys[SDL_SCANCODE_LEFT])  plane->x -= 10;
-    if (keys[SDL_SCANCODE_RIGHT]) plane->x += 10;
-    if (keys[SDL_SCANCODE_UP])    plane->y -= 10;
-    if (keys[SDL_SCANCODE_DOWN])  plane->y += 10;
-    if (plane->x < 0)                        plane->x = 0;
-    if (plane->y < 0)                        plane->y = 0;
-    if (plane->x > SCREEN_WIDTH  - plane->w) plane->x = SCREEN_WIDTH  - plane->w;
-    if (plane->y > SCREEN_HEIGHT - plane->h) plane->y = SCREEN_HEIGHT - plane->h;
+    if (keys[SDL_SCANCODE_LEFT])
+        plane->x -= 10;
+    if (keys[SDL_SCANCODE_RIGHT])
+        plane->x += 10;
+    if (keys[SDL_SCANCODE_UP])
+        plane->y -= 10;
+    if (keys[SDL_SCANCODE_DOWN])
+        plane->y += 10;
+    if (plane->x < 0)
+        plane->x = 0;
+    if (plane->y < 0)
+        plane->y = 0;
+    if (plane->x > SCREEN_WIDTH - plane->w)
+        plane->x = SCREEN_WIDTH - plane->w;
+    if (plane->y > SCREEN_HEIGHT - plane->h)
+        plane->y = SCREEN_HEIGHT - plane->h;
 
     // --- shooting (rapid fire / triple shot) ---
     int effectiveDelay = (effects->rapid > 0) ? 4 : shootDelay;
     (*shootTimer)++;
-    if (*shootTimer >= effectiveDelay) {
+    if (*shootTimer >= effectiveDelay)
+    {
         *shootTimer = 0;
         playSound(sounds->shoot);
 
+#define PLAYER_BULLET_W 36
+#define PLAYER_BULLET_H 14
+
         int gunCount = (effects->triple > 0) ? 3 : 2;
         float gunX[3];
-        if (gunCount == 2) {
-            gunX[0] = plane->x + plane->w * 0.25f - 8;
-            gunX[1] = plane->x + plane->w * 0.75f - 8;
-        } else {
-            gunX[0] = plane->x + plane->w * 0.12f - 8;
-            gunX[1] = plane->x + plane->w * 0.50f - 8;
-            gunX[2] = plane->x + plane->w * 0.88f - 8;
+
+        if (gunCount == 2)
+        {
+            gunX[0] = plane->x + plane->w * 0.25f - PLAYER_BULLET_W / 2;
+            gunX[1] = plane->x + plane->w * 0.75f - PLAYER_BULLET_W / 2;
         }
-        for (int g = 0; g < gunCount; g++) {
-            for (int i = 0; i < MAX_BULLETS; i++) {
-                if (!bullets[i].active) {
-                    bullets[i].x = gunX[g]; bullets[i].y = plane->y; bullets[i].active = 1;
+        else
+        {
+            gunX[0] = plane->x + plane->w * 0.12f - PLAYER_BULLET_W / 2;
+            gunX[1] = plane->x + plane->w * 0.50f - PLAYER_BULLET_W / 2;
+            gunX[2] = plane->x + plane->w * 0.88f - PLAYER_BULLET_W / 2;
+        }
+        for (int g = 0; g < gunCount; g++)
+        {
+            for (int i = 0; i < MAX_BULLETS; i++)
+            {
+                if (!bullets[i].active)
+                {
+                    bullets[i].x = gunX[g];
+                    bullets[i].y = plane->y;
+                    bullets[i].active = 1;
                     break;
                 }
             }
@@ -192,44 +261,59 @@ void runLocalMode(
     }
 
     // --- move player bullets ---
-    for (int i = 0; i < MAX_BULLETS; i++) {
-        if (!bullets[i].active) continue;
+    for (int i = 0; i < MAX_BULLETS; i++)
+    {
+        if (!bullets[i].active)
+            continue;
         bullets[i].y -= 8;
-        if (bullets[i].y < 0) bullets[i].active = 0;
+        if (bullets[i].y < 0)
+            bullets[i].active = 0;
     }
 
     // --- difficulty scaling ---
     int spawnChance = 5 + *score / 100;
-    if (spawnChance > 25) spawnChance = 25;
+    if (spawnChance > 25)
+        spawnChance = 25;
     float baseSpeed = 2.0f + *score / 250.0f;
-    if (baseSpeed > 5.0f) baseSpeed = 5.0f;
+    if (baseSpeed > 5.0f)
+        baseSpeed = 5.0f;
 
     // --- update enemies ---
-    for (int i = 0; i < MAX_ENEMIES; i++) {
-        if (!enemies[i].active && rand() % 1000 < spawnChance) {
+    for (int i = 0; i < MAX_ENEMIES; i++)
+    {
+        if (!enemies[i].active && rand() % 1000 < spawnChance)
+        {
             int tough = (rand() % 5 == 0);
             enemies[i] = (Enemy){
                 .baseX = rand() % (SCREEN_WIDTH - 64),
                 .y = -64,
                 .offset = (float)(rand() % 360) / 50.0f,
-                .active = 1, .type = tough,
+                .active = 1,
+                .type = tough,
                 .health = tough ? 3 : 1,
-                .shootTimer = 40 + rand() % 60
-            };
+                .shootTimer = 40 + rand() % 60};
             enemies[i].x = enemies[i].baseX;
         }
-        if (!enemies[i].active) continue;
+        if (!enemies[i].active)
+            continue;
 
         float spd = (enemies[i].type == 1) ? baseSpeed * 0.7f : baseSpeed;
         enemies[i].y += spd;
         enemies[i].offset += 0.05f;
         enemies[i].x = enemies[i].baseX + 50 * sin(enemies[i].offset);
-        if (enemies[i].y > SCREEN_HEIGHT) { enemies[i].active = 0; continue; }
+        if (enemies[i].y > SCREEN_HEIGHT)
+        {
+            enemies[i].active = 0;
+            continue;
+        }
 
-        if (--enemies[i].shootTimer <= 0) {
+        if (--enemies[i].shootTimer <= 0)
+        {
             enemies[i].shootTimer = 40 + rand() % 60;
-            for (int k = 0; k < MAX_ENEMY_BULLETS; k++) {
-                if (!enemyBullets[k].active) {
+            for (int k = 0; k < MAX_ENEMY_BULLETS; k++)
+            {
+                if (!enemyBullets[k].active)
+                {
                     enemyBullets[k] = (EnemyBullet){enemies[i].x + 24, enemies[i].y + 64, 1};
                     break;
                 }
@@ -238,33 +322,48 @@ void runLocalMode(
     }
 
     // --- move enemy bullets ---
-    for (int i = 0; i < MAX_ENEMY_BULLETS; i++) {
-        if (!enemyBullets[i].active) continue;
+    for (int i = 0; i < MAX_ENEMY_BULLETS; i++)
+    {
+        if (!enemyBullets[i].active)
+            continue;
         enemyBullets[i].y += 6;
-        if (enemyBullets[i].y > SCREEN_HEIGHT) enemyBullets[i].active = 0;
+        if (enemyBullets[i].y > SCREEN_HEIGHT)
+            enemyBullets[i].active = 0;
     }
 
     // --- move power-ups ---
-    for (int i = 0; i < MAX_POWERUPS; i++) {
-        if (!powerUps[i].active) continue;
+    for (int i = 0; i < MAX_POWERUPS; i++)
+    {
+        if (!powerUps[i].active)
+            continue;
         powerUps[i].y += 1.5f;
-        if (powerUps[i].y > SCREEN_HEIGHT) { powerUps[i].active = 0; continue; }
+        if (powerUps[i].y > SCREEN_HEIGHT)
+        {
+            powerUps[i].active = 0;
+            continue;
+        }
         SDL_Rect pr = {(int)powerUps[i].x, (int)powerUps[i].y, 32, 32};
-        if (SDL_HasIntersection(plane, &pr)) {
+        if (SDL_HasIntersection(plane, &pr))
+        {
             applyPowerUp(powerUps[i].type, effects, enemies, enemyBullets, score);
             powerUps[i].active = 0;
         }
     }
 
     // --- player bullets vs enemies ---
-    for (int i = 0; i < MAX_BULLETS; i++) {
-        for (int j = 0; j < MAX_ENEMIES; j++) {
-            if (!bullets[i].active || !enemies[j].active) continue;
+    for (int i = 0; i < MAX_BULLETS; i++)
+    {
+        for (int j = 0; j < MAX_ENEMIES; j++)
+        {
+            if (!bullets[i].active || !enemies[j].active)
+                continue;
             SDL_Rect br = {(int)bullets[i].x, (int)bullets[i].y, 16, 16};
-            SDL_Rect en = {(int)enemies[j].x,  (int)enemies[j].y, 64, 64};
-            if (!SDL_HasIntersection(&br, &en)) continue;
+            SDL_Rect en = {(int)enemies[j].x, (int)enemies[j].y, 64, 64};
+            if (!SDL_HasIntersection(&br, &en))
+                continue;
             bullets[i].active = 0;
-            if (--enemies[j].health <= 0) {
+            if (--enemies[j].health <= 0)
+            {
                 int dropChance = (enemies[j].type == 1) ? 40 : 20;
                 if (rand() % 100 < dropChance)
                     dropPowerUp(powerUps, enemies[j].x + 16, enemies[j].y + 16);
@@ -275,31 +374,48 @@ void runLocalMode(
     }
 
     // --- enemies ram player ---
-    for (int i = 0; i < MAX_ENEMIES; i++) {
-        if (!enemies[i].active) continue;
+    for (int i = 0; i < MAX_ENEMIES; i++)
+    {
+        if (!enemies[i].active)
+            continue;
         SDL_Rect en = {(int)enemies[i].x, (int)enemies[i].y, 64, 64};
-        if (!SDL_HasIntersection(plane, &en)) continue;
+        if (!SDL_HasIntersection(plane, &en))
+            continue;
         enemies[i].active = 0;
-        if (effects->shield > 0) continue;
+        if (effects->shield > 0)
+            continue;
         playSound(sounds->hit);
-        if (--(*lives) <= 0) { *finalScore = *score; *state = STATE_GAME_OVER; }
+        if (--(*lives) <= 0)
+        {
+            *finalScore = *score;
+            *state = STATE_GAME_OVER;
+        }
     }
 
     // --- enemy bullets hit player ---
-    for (int i = 0; i < MAX_ENEMY_BULLETS; i++) {
-        if (!enemyBullets[i].active) continue;
+    for (int i = 0; i < MAX_ENEMY_BULLETS; i++)
+    {
+        if (!enemyBullets[i].active)
+            continue;
         SDL_Rect br = {(int)enemyBullets[i].x, (int)enemyBullets[i].y, 16, 16};
-        if (!SDL_HasIntersection(plane, &br)) continue;
+        if (!SDL_HasIntersection(plane, &br))
+            continue;
         enemyBullets[i].active = 0;
-        if (effects->shield > 0) continue;
+        if (effects->shield > 0)
+            continue;
         playSound(sounds->hit);
-        if (--(*lives) <= 0) { *finalScore = *score; *state = STATE_GAME_OVER; }
+        if (--(*lives) <= 0)
+        {
+            *finalScore = *score;
+            *state = STATE_GAME_OVER;
+        }
     }
 
     // ===================== RENDER =====================
 
     // shield glow around player
-    if (effects->shield > 0 && (effects->shield > 60 || (effects->shield / 8) % 2 == 0)) {
+    if (effects->shield > 0 && (effects->shield > 60 || (effects->shield / 8) % 2 == 0))
+    {
         SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
         SDL_SetRenderDrawColor(renderer, 50, 160, 255, 160);
         SDL_Rect s1 = {plane->x - 5, plane->y - 5, plane->w + 10, plane->h + 10};
@@ -312,35 +428,47 @@ void runLocalMode(
     SDL_RenderCopy(renderer, tex->plane1, NULL, plane);
 
     // player bullets
-    SDL_Rect r = {0, 0, 16, 16};
-    for (int i = 0; i < MAX_BULLETS; i++) {
-        if (!bullets[i].active) continue;
-        r.x = (int)bullets[i].x; r.y = (int)bullets[i].y;
+    SDL_Rect r = {0, 0, 36, 14};
+    for (int i = 0; i < MAX_BULLETS; i++)
+    {
+        if (!bullets[i].active)
+            continue;
+        r.x = (int)bullets[i].x;
+        r.y = (int)bullets[i].y;
         SDL_RenderCopyEx(renderer, tex->bullet, NULL, &r, -90, NULL, SDL_FLIP_NONE);
     }
 
     // enemy bullets (red)
     SDL_SetTextureColorMod(tex->bullet, 255, 60, 60);
-    for (int i = 0; i < MAX_ENEMY_BULLETS; i++) {
-        if (!enemyBullets[i].active) continue;
-        r.x = (int)enemyBullets[i].x; r.y = (int)enemyBullets[i].y;
+    for (int i = 0; i < MAX_ENEMY_BULLETS; i++)
+    {
+        if (!enemyBullets[i].active)
+            continue;
+        r.x = (int)enemyBullets[i].x;
+        r.y = (int)enemyBullets[i].y;
         SDL_RenderCopyEx(renderer, tex->bullet, NULL, &r, 90, NULL, SDL_FLIP_NONE);
     }
     SDL_SetTextureColorMod(tex->bullet, 255, 255, 255);
 
     // enemies
     SDL_Rect er = {0, 0, 64, 64};
-    for (int i = 0; i < MAX_ENEMIES; i++) {
-        if (!enemies[i].active) continue;
-        er.x = (int)enemies[i].x; er.y = (int)enemies[i].y;
-        if (enemies[i].type == 1) SDL_SetTextureColorMod(tex->enemy, 255, 80, 80);
+    for (int i = 0; i < MAX_ENEMIES; i++)
+    {
+        if (!enemies[i].active)
+            continue;
+        er.x = (int)enemies[i].x;
+        er.y = (int)enemies[i].y;
+        if (enemies[i].type == 1)
+            SDL_SetTextureColorMod(tex->enemy, 255, 80, 80);
         SDL_RenderCopyEx(renderer, tex->enemy, NULL, &er, 0, NULL, SDL_FLIP_VERTICAL);
         SDL_SetTextureColorMod(tex->enemy, 255, 255, 255);
     }
 
     // power-ups (32x32 colored icon with letter)
-    for (int i = 0; i < MAX_POWERUPS; i++) {
-        if (!powerUps[i].active) continue;
+    for (int i = 0; i < MAX_POWERUPS; i++)
+    {
+        if (!powerUps[i].active)
+            continue;
         int px = (int)powerUps[i].x, py = (int)powerUps[i].y;
         PowerUpType t = powerUps[i].type;
 
@@ -360,7 +488,8 @@ void runLocalMode(
     }
 
     // bomb flash overlay
-    if (effects->bombFlash > 0) {
+    if (effects->bombFlash > 0)
+    {
         SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
         Uint8 a = (Uint8)(effects->bombFlash * 18);
         SDL_SetRenderDrawColor(renderer, 255, 220, 80, a);
@@ -370,21 +499,30 @@ void runLocalMode(
 
     // hearts HUD
     SDL_Rect hr = {10, 10, 32, 32};
-    for (int i = 0; i < *lives; i++) {
+    for (int i = 0; i < *lives; i++)
+    {
         hr.x = 10 + i * 40;
         SDL_RenderCopy(renderer, tex->heart, NULL, &hr);
     }
 
     // active power-up indicator bar (bottom-left)
-    typedef struct { int *timer; int maxTime; Uint8 r, g, b; const char *lbl; } Ind;
+    typedef struct
+    {
+        int *timer;
+        int maxTime;
+        Uint8 r, g, b;
+        const char *lbl;
+    } Ind;
     Ind inds[3] = {
-        {&effects->rapid,  360, 255, 140,   0, "R"},
-        {&effects->triple, 420,  50, 220,  80, "T"},
-        {&effects->shield, 300,  50, 160, 255, "S"},
+        {&effects->rapid, 360, 255, 140, 0, "R"},
+        {&effects->triple, 420, 50, 220, 80, "T"},
+        {&effects->shield, 300, 50, 160, 255, "S"},
     };
     int hudX = 10;
-    for (int i = 0; i < 3; i++) {
-        if (*inds[i].timer <= 0) continue;
+    for (int i = 0; i < 3; i++)
+    {
+        if (*inds[i].timer <= 0)
+            continue;
         SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
         SDL_SetRenderDrawColor(renderer, inds[i].r, inds[i].g, inds[i].b, 190);
         SDL_Rect icon = {hudX, SCREEN_HEIGHT - 52, 26, 26};
@@ -422,21 +560,24 @@ void runClientMode(
         keys[SDL_SCANCODE_DOWN]);
 
     NetGameState netState;
-    if (!networkClientGetState(&netState)) {
+    if (!networkClientGetState(&netState))
+    {
         *state = STATE_MAIN_MENU;
-        *mode  = MODE_LOCAL;
+        *mode = MODE_LOCAL;
         return;
     }
 
-    if (netState.gameOver) {
+    if (netState.gameOver)
+    {
         networkClientDisconnect();
         *state = STATE_MAIN_MENU;
-        *mode  = MODE_LOCAL;
+        *mode = MODE_LOCAL;
         return;
     }
 
     SDL_Texture *playerTextures[NET_MAX_PLAYERS] = {tex->plane1, tex->plane2};
-    for (int i = 0; i < NET_MAX_PLAYERS; i++) {
+    for (int i = 0; i < NET_MAX_PLAYERS; i++)
+    {
         if (!netState.players[i].active)
             continue;
         SDL_Rect r = {(int)netState.players[i].x, (int)netState.players[i].y, 64, 64};
@@ -444,7 +585,8 @@ void runClientMode(
     }
 
     SDL_Rect r = {0, 0, 16, 16};
-    for (int i = 0; i < NET_MAX_BULLETS; i++) {
+    for (int i = 0; i < NET_MAX_BULLETS; i++)
+    {
         if (!netState.bullets[i].active)
             continue;
         r.x = (int)netState.bullets[i].x;
@@ -453,7 +595,8 @@ void runClientMode(
     }
 
     SDL_Rect er = {0, 0, 64, 64};
-    for (int i = 0; i < NET_MAX_ENEMIES; i++) {
+    for (int i = 0; i < NET_MAX_ENEMIES; i++)
+    {
         if (!netState.enemies[i].active)
             continue;
         er.x = (int)netState.enemies[i].x;
@@ -462,7 +605,8 @@ void runClientMode(
     }
 
     SDL_Rect hr = {10, 10, 32, 32};
-    for (int i = 0; i < netState.lives; i++) {
+    for (int i = 0; i < netState.lives; i++)
+    {
         hr.x = 10 + i * 40;
         SDL_RenderCopy(renderer, tex->heart, NULL, &hr);
     }
