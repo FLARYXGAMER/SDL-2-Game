@@ -12,6 +12,8 @@
 #include "network.h"
 #include "sound.h"
 #include "UI.h"
+#include "player.h"
+#include "bullets.h"
 
 static void initSDL(SDL_Window **window, SDL_Renderer **renderer, TTF_Font **font)
 {
@@ -30,11 +32,6 @@ static void initSDL(SDL_Window **window, SDL_Renderer **renderer, TTF_Font **fon
 
     *renderer = SDL_CreateRenderer(*window, -1, SDL_RENDERER_ACCELERATED);
 
-    /*
-        Viktigt:
-        Spelet använder fortfarande SCREEN_WIDTH och SCREEN_HEIGHT internt.
-        SDL skalar sedan upp spelet till fullscreen.
-    */
     SDL_RenderSetLogicalSize(*renderer, SCREEN_WIDTH, SCREEN_HEIGHT);
 
     *font = TTF_OpenFont("resources/fonts/DejaVuSans.ttf", 24);
@@ -52,11 +49,6 @@ static void handleButtonEvents(SDL_Renderer *renderer, Button *b, SDL_Event *eve
     float logicalX, logicalY;
 
     SDL_GetMouseState(&mx, &my);
-
-    /*
-        Detta fixar fullscreen-problemet:
-        Musens riktiga skärmposition görs om till spelets interna koordinater.
-    */
     SDL_RenderWindowToLogical(renderer, mx, my, &logicalX, &logicalY);
 
     SDL_Point mousePoint = {
@@ -136,17 +128,9 @@ int main(int argc, char *argv[])
     GameState state = STATE_MAIN_MENU;
     PlayMode mode = MODE_LOCAL;
 
-    /*
-        Flygplanet är nu 96x96.
-        Vill du göra det mindre/större ändrar du de två sista värdena.
-    */
-    SDL_Rect plane = {
-        SCREEN_WIDTH / 2 - 48,
-        SCREEN_HEIGHT - 116,
-        96,
-        96};
+    Player *player = playerCreate();
+    Bullets *bullets = bulletsCreate();
 
-    Bullet bullets[MAX_BULLETS] = {0};
     Enemy enemies[MAX_ENEMIES] = {0};
     EnemyBullet enemyBullets[MAX_ENEMY_BULLETS] = {0};
     PowerUp powerUps[MAX_POWERUPS] = {0};
@@ -178,9 +162,6 @@ int main(int argc, char *argv[])
             {
                 handleKeyDown(&e, &state);
 
-                /*
-                    Tryck F för att växla mellan fullscreen och fönsterläge.
-                */
                 if (e.key.keysym.sym == SDLK_f)
                 {
                     fullscreen = !fullscreen;
@@ -225,7 +206,7 @@ int main(int argc, char *argv[])
             if (prevState == STATE_GAME_OVER && state == STATE_PLAYING)
             {
                 resetLocalGame(
-                    &plane,
+                    player,
                     bullets,
                     enemies,
                     enemyBullets,
@@ -242,10 +223,6 @@ int main(int argc, char *argv[])
 
         mapY += mapSpeed;
 
-        /*
-            Nollställ inte vid SCREEN_HEIGHT längre.
-            Bakgrunden sköter loopningen själv i renderScrollingBackground.
-        */
         if (mapY > 100000.0f)
             mapY = 0;
 
@@ -276,7 +253,7 @@ int main(int argc, char *argv[])
                     font,
                     &tex,
                     &sounds,
-                    &plane,
+                    player,
                     bullets,
                     enemies,
                     enemyBullets,
@@ -326,6 +303,9 @@ int main(int argc, char *argv[])
         SDL_RenderPresent(renderer);
         SDL_Delay(16);
     }
+
+    playerDestroy(player);
+    bulletsDestroy(bullets);
 
     destroyGameTextures(&tex);
     freeGameSounds(&sounds);
