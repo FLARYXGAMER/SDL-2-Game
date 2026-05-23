@@ -6,17 +6,8 @@
 
 #define MAX_BULLETS 100
 
-typedef struct
-{
-    float x;
-    float y;
-    bool active;
-} Bullet;
-
-typedef struct
-{
-    Bullet items[MAX_BULLETS];
-} Bullets;
+/* ADT 2: Bullets*/
+typedef struct Bullets Bullets;
 
 Bullets *bulletsCreate(void);
 void bulletsDestroy(Bullets *bullets);

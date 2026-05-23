@@ -1,8 +1,19 @@
 #include "bullets.h"
-#include "game.h"
+#include "player.h"
 #include <stdlib.h>
 #include <string.h>
 
+typedef struct
+{
+    float x;
+    float y;
+    bool active;
+} Bullet;
+
+struct Bullets
+{
+    Bullet items[MAX_BULLETS];
+};
 
 Bullets *bulletsCreate(void)
 {
