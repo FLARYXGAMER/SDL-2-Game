@@ -229,8 +229,8 @@ void runLocalMode(
         *shootTimer = 0;
         playSound(sounds->shoot);
 
-#define PLAYER_BULLET_W 36
-#define PLAYER_BULLET_H 14
+#define PLAYER_BULLET_W 16 //36
+#define PLAYER_BULLET_H 16 //14
 
         int gunCount = (effects->triple > 0) ? 3 : 2;
         float gunX[3];
