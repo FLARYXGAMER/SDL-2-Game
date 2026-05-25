@@ -38,8 +38,10 @@ void bulletsReset(Bullets *bullets)
 
 void bulletsAdd(Bullets *bullets, float x, float y)
 {
-    for (int i = 0; i < MAX_BULLETS; i++) {
-        if (!bullets->items[i].active) {
+    for (int i = 0; i < MAX_BULLETS; i++)
+    {
+        if (!bullets->items[i].active)
+        {
             bullets->items[i].x = x;
             bullets->items[i].y = y;
             bullets->items[i].active = true;
@@ -62,7 +64,8 @@ void bulletsUpdate(Bullets *bullets)
     if (bullets == NULL)
         return;
 
-    for (int i = 0; i < MAX_BULLETS; i++) {
+    for (int i = 0; i < MAX_BULLETS; i++)
+    {
         if (!bullets->items[i].active)
             continue;
 
@@ -77,8 +80,10 @@ void bulletsRender(const Bullets *bullets, SDL_Renderer *renderer, SDL_Texture *
     if (bullets == NULL)
         return;
 
-    SDL_Rect r = {0, 0, 16, 16};
-    for (int i = 0; i < MAX_BULLETS; i++) {
+    SDL_Rect r = {0, 0, 36, 14};
+
+    for (int i = 0; i < MAX_BULLETS; i++)
+    {
         if (!bullets->items[i].active)
             continue;
 
@@ -106,7 +111,7 @@ void bulletsDeactivate(Bullets *bullets, int index)
 
 SDL_Rect bulletsGetRect(const Bullets *bullets, int index)
 {
-    SDL_Rect r = {0, 0, 16, 16};
+    SDL_Rect r = {0, 0, 36, 14};
     if (bullets == NULL || index < 0 || index >= MAX_BULLETS)
         return r;
 
